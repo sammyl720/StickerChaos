@@ -179,13 +179,15 @@ export class GameScene extends Phaser.Scene {
     const stats = effectiveStats(entity);
     piece.sprite.setDisplaySize(stats.radius * 2, stats.radius * 2);
     const body = piece.sprite.body as Phaser.Physics.Arcade.Body;
-    body.setCircle(stats.radius);
+    // Arcade's setCircle takes source pixels, then applies the sprite scale.
+    // Half the source texture width produces a collision circle matching the visible radius.
+    body.setCircle(piece.sprite.width / 2);
     body.setOffset(0, 0);
     body.setMass(stats.mass);
     body.setDrag(stats.drag, stats.drag);
     body.setBounce(stats.restitution);
     body.setCollideWorldBounds(true);
-    body.setMaxVelocity(Math.max(340, stats.speed * 2));
+    body.setMaxVelocity(Math.max(420, stats.speed * 2));
     piece.shadow.setSize(stats.radius * 1.9, 11).setAlpha(stats.canFloat ? .09 : .2);
     if (!this.settings.reducedMotion) {
       this.tweens.add({ targets: piece.sprite, scaleX: piece.sprite.scaleX * 1.12, scaleY: piece.sprite.scaleY * .88, duration: 120, yoyo: true });
@@ -230,7 +232,7 @@ export class GameScene extends Phaser.Scene {
     const launchGoal = this.level.goals.find((goal) => goal.targetId === targetId && Math.hypot(goal.x - result.target.x,goal.y - result.target.y) > goal.radius + 10);
     if (launchGoal && (sticker === 'BOUNCY' || sticker === 'SLIPPERY') && launchGoal.requires.every((value) => result.target.stickers.includes(value))) {
       const dx = launchGoal.x - result.target.x, dy = launchGoal.y - result.target.y, distance = Math.max(1,Math.hypot(dx,dy));
-      this.pieces.get(targetId)?.sprite.setVelocity(dx/distance*300,dy/distance*300);
+      this.pieces.get(targetId)?.sprite.setVelocity(dx/distance*380,dy/distance*380);
     }
     this.burst(result.target.x, result.target.y, STICKER_INFO[sticker].color);
     this.callbacks.onTransfer(sticker, source?.kind ?? '', result.target.stickers);
@@ -345,10 +347,10 @@ export class GameScene extends Phaser.Scene {
             if (distance > 8) piece.sprite.setVelocity(dx/distance*attrs.speed*1.7,dy/distance*attrs.speed*1.7);
             else piece.sprite.setVelocity(0,0);
           } else if (entity.stickers.includes('FAST') || entity.behavior === 'wander' || entity.behavior === 'patrol') {
-            const speed = entity.stickers.includes('FAST') ? attrs.speed * .58 : attrs.speed * .3;
+            const speed = entity.stickers.includes('FAST') ? attrs.speed * .55 : attrs.speed * .3;
             const phase = this.tick * .001 + entity.id.length;
             const dx = Math.cos(phase * .9), dy = Math.sin(phase * 1.15);
-            piece.sprite.setAcceleration(dx * speed * 3, dy * speed * 3);
+            piece.sprite.setAcceleration(0,0).setVelocity(dx * speed, dy * speed);
           } else piece.sprite.setAcceleration(0,0);
         }
       }

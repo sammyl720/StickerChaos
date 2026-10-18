@@ -55,6 +55,7 @@ function GameScreen({ number, onBack, onNext }: { number:number; onBack:()=>void
   const scene = useRef<GameScene|null>(null);
   useEffect(() => {
     if (!host.current) return;
+    const canvasHost = host.current;
     const gameScene = new GameScene(level, {
       onStatus: setStatus,
       onTransfer: (sticker,sourceKind,stickers) => recordTransfer(sticker,sourceKind,stickers),
@@ -65,7 +66,7 @@ function GameScreen({ number, onBack, onNext }: { number:number; onBack:()=>void
     scene.current = gameScene;
     const game = new Phaser.Game({
       type: Phaser.AUTO,
-      parent: host.current,
+      parent: canvasHost,
       width:390,height:620,
       backgroundColor:'#fff0c8',
       scale:{ mode:Phaser.Scale.FIT, autoCenter:Phaser.Scale.CENTER_BOTH, width:390, height:620 },
@@ -75,7 +76,7 @@ function GameScreen({ number, onBack, onNext }: { number:number; onBack:()=>void
     });
     const visibility = () => { if(document.hidden){gameScene.setPaused(true);setMusicPaused(true);setPaused(true);} };
     document.addEventListener('visibilitychange',visibility);
-    return () => { document.removeEventListener('visibilitychange',visibility); scene.current=null; stopMusic(); game.destroy(true); };
+    return () => { document.removeEventListener('visibilitychange',visibility); scene.current=null; stopMusic(); game.destroy(true); canvasHost.replaceChildren(); };
     // A level's game is intentionally mounted once; settings can be changed from the menu.
   },[number]);
   const resume = () => {setPaused(false);setMusicPaused(false);scene.current?.setPaused(false);};

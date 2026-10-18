@@ -94,3 +94,113 @@ test('moving puzzle goals respond to BOUNCY and FLOATING', async ({page}, testIn
   await clickWorld(page,235,270); // boulder crosses the pond
   await expect(page.getByText('1/1 switches')).toBeVisible({timeout:5000});
 });
+
+test('giant bouncing ball reaches the factory switch', async ({page}) => {
+  await page.goto('/');
+  await page.evaluate((progress) => localStorage.setItem('sticker-chaos-progress', JSON.stringify(progress)), {
+    ...DEFAULT_PROGRESS, completedLevels: Array.from({length:17},(_,index)=>index+1)
+  });
+  await page.reload();
+  await page.getByRole('button',{name:/PLAY/}).first().click();
+  await page.getByRole('button',{name:/Level 18:/}).click();
+  await expect(page.locator('canvas')).toBeVisible();
+  await page.waitForTimeout(500);
+  await clickWorld(page,86,207); // BIG badge on the chicken
+  await clickWorld(page,294,380); // ball
+  await expect(page.getByText('BIG stuck to the ball!')).toBeVisible();
+  await clickWorld(page,85,337); // BOUNCY badge on the robot
+  await clickWorld(page,294,380); // launch the ball
+  await expect(page.getByText('1/1 switches')).toBeVisible({timeout:5000});
+});
+
+for (const puzzle of [
+  {number:2, sourceX:86, sourceY:270, sticker:'FAST', targetX:294, targetY:270},
+  {number:15, sourceX:86, sourceY:270, sticker:'FAST', targetX:294, targetY:270},
+  {number:16, sourceX:86, sourceY:270, sticker:'SLIPPERY', targetX:294, targetY:270}
+]) {
+  test(`level ${puzzle.number} moving switch activates`, async ({page}, testInfo) => {
+    await page.goto('/');
+    await page.evaluate((progress) => localStorage.setItem('sticker-chaos-progress', JSON.stringify(progress)), {
+      ...DEFAULT_PROGRESS, completedLevels: Array.from({length:puzzle.number-1},(_,index)=>index+1)
+    });
+    await page.reload();
+    await page.getByRole('button',{name:/PLAY/}).first().click();
+    await page.getByRole('button',{name:new RegExp(`Level ${puzzle.number}:`)}).click();
+    await expect(page.locator('canvas')).toBeVisible();
+    await page.waitForTimeout(450);
+    if (puzzle.number===15) await page.screenshot({path:testInfo.outputPath('before-selection.png')});
+    const stickerButton = page.getByRole('button',{name:new RegExp(puzzle.sticker)});
+    for (const [x,y] of [[puzzle.sourceX,puzzle.sourceY],[puzzle.sourceX+18,puzzle.sourceY],[puzzle.sourceX+36,puzzle.sourceY],[puzzle.sourceX+54,puzzle.sourceY],[puzzle.sourceX,puzzle.sourceY-43],[puzzle.sourceX+36,puzzle.sourceY-43]]) {
+      if (await stickerButton.isVisible()) break;
+      await clickWorld(page,x,y);
+      await page.waitForTimeout(100);
+    }
+    if (puzzle.number===15) await page.screenshot({path:testInfo.outputPath('after-selection.png')});
+    await stickerButton.click({timeout:3000});
+    await clickWorld(page,puzzle.targetX,puzzle.targetY);
+    await expect(page.getByText('1/1 switches')).toBeVisible({timeout:5000});
+  });
+}
+
+test('FAST and SLIPPERY together send the turtle to its track', async ({page}) => {
+  await page.goto('/');
+  await page.evaluate((progress) => localStorage.setItem('sticker-chaos-progress', JSON.stringify(progress)), {
+    ...DEFAULT_PROGRESS, completedLevels: Array.from({length:9},(_,index)=>index+1)
+  });
+  await page.reload();
+  await page.getByRole('button',{name:/PLAY/}).first().click();
+  await page.getByRole('button',{name:/Level 10:/}).click();
+  await expect(page.locator('canvas')).toBeVisible();
+  await page.waitForTimeout(500);
+  await clickWorld(page,86,270);
+  await page.getByRole('button',{name:/FAST/}).click();
+  await clickWorld(page,294,380);
+  await expect(page.getByText('FAST stuck to the turtle!')).toBeVisible();
+  await clickWorld(page,85,334); // SLIPPERY badge on the crate
+  await clickWorld(page,294,380);
+  await expect(page.getByText('1/1 switches')).toBeVisible({timeout:5000});
+});
+
+test('TINY player fits through the castle passage and wins', async ({page}, testInfo) => {
+  await page.goto('/');
+  await page.evaluate((progress) => localStorage.setItem('sticker-chaos-progress', JSON.stringify(progress)), {
+    ...DEFAULT_PROGRESS,
+    settings:{...DEFAULT_PROGRESS.settings,controlMode:'tap'},
+    completedLevels: Array.from({length:13},(_,index)=>index+1)
+  });
+  await page.reload();
+  await page.getByRole('button',{name:/PLAY/}).first().click();
+  await page.getByRole('button',{name:/Level 14:/}).click();
+  await expect(page.locator('canvas')).toBeVisible();
+  await page.waitForTimeout(500);
+  await clickWorld(page,86,231); // TINY badge on the snail
+  await clickWorld(page,193,495); // player
+  await expect(page.getByText('1/1 switches')).toBeVisible();
+  await clickWorld(page,77,502); // treasure
+  await expect(page.getByText('🎁 ✓')).toBeVisible({timeout:5000});
+  await clickWorld(page,195,255); // align with the narrow gap
+  await page.waitForTimeout(1600);
+  await page.screenshot({path:testInfo.outputPath('tiny-passage.png')});
+  await clickWorld(page,195,62); // pass through to the exit
+  await page.waitForTimeout(1800);
+  await page.screenshot({path:testInfo.outputPath('after-passage.png')});
+  await expect(page.getByRole('heading',{name:'Sticker spectacular!'})).toBeVisible({timeout:5000});
+});
+
+test('the chicken king boss needs two stickers on one rock', async ({page}) => {
+  await page.goto('/');
+  await page.evaluate((progress) => localStorage.setItem('sticker-chaos-progress', JSON.stringify(progress)), {
+    ...DEFAULT_PROGRESS, completedLevels:[1,2,3,4]
+  });
+  await page.reload();
+  await page.getByRole('button',{name:/PLAY/}).first().click();
+  await page.getByRole('button',{name:/Level 5:/}).click();
+  await expect(page.locator('canvas')).toBeVisible();
+  await page.waitForTimeout(500);
+  await clickWorld(page,56,174); // BIG badge on the chicken king
+  await clickWorld(page,294,270); // rock
+  await expect(page.getByText('BIG stuck to the rock!')).toBeVisible();
+  await clickWorld(page,90,193); // BOUNCY badge now centered above the king
+  await clickWorld(page,294,270);
+  await expect(page.getByText('1/1 switches')).toBeVisible();
+});
