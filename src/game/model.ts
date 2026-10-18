@@ -56,6 +56,14 @@ export const GoalSchema = z.object({
 });
 export type Goal = z.infer<typeof GoalSchema>;
 
+export const FixtureSchema = z.object({
+  kind: z.enum(['wall', 'gate', 'conveyor', 'hazard']),
+  x: z.number(), y: z.number(), w: z.number().positive(), h: z.number().positive(),
+  opensAfter: z.number().int().nonnegative().optional(),
+  dx: z.number().optional(), dy: z.number().optional()
+});
+export type Fixture = z.infer<typeof FixtureSchema>;
+
 export const LevelSchema = z.object({
   number: z.number().int().min(1).max(20),
   name: z.string(),
@@ -63,6 +71,8 @@ export const LevelSchema = z.object({
   hint: z.string(),
   entities: z.array(EntitySchema).min(2),
   goals: z.array(GoalSchema).min(1),
+  fixtures: z.array(FixtureSchema).default([]),
+  bossId: z.string().optional(),
   treasure: z.object({ x: z.number(), y: z.number() }),
   gem: z.object({ x: z.number(), y: z.number() }),
   exit: z.object({ x: z.number(), y: z.number() }),

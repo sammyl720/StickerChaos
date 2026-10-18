@@ -78,4 +78,19 @@ export function createArt(scene: Phaser.Scene): void {
     if (!texture) continue;
     draw(texture.getContext(), kind); texture.refresh();
   }
+  if (!scene.textures.exists('boss-robot')) {
+    const texture = scene.textures.createCanvas('boss-robot', 128, 128);
+    if (texture) {
+      const ctx = texture.getContext();
+      draw(ctx, 'robot');
+      ellipse(ctx, 11, 76, 13, 27, '#e5f8ff', '#4e6b98', 4);
+      ellipse(ctx, 117, 76, 13, 27, '#e5f8ff', '#4e6b98', 4);
+      ellipse(ctx, 46, 22, 11, 17, '#f26a79', '#a85075', 3);
+      ellipse(ctx, 64, 16, 11, 19, '#f26a79', '#a85075', 3);
+      ellipse(ctx, 82, 22, 11, 17, '#f26a79', '#a85075', 3);
+      ctx.beginPath(); ctx.moveTo(51,76); ctx.lineTo(77,76); ctx.lineTo(64,93); ctx.closePath();
+      ctx.fillStyle = '#ffd45e'; ctx.fill(); ctx.strokeStyle = '#b8843b'; ctx.lineWidth = 4; ctx.stroke();
+      texture.refresh();
+    }
+  }
 }

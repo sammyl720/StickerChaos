@@ -65,9 +65,11 @@ test('complete the first puzzle with a real sticker transfer and restore progres
   await expect(page.getByText('1/1 switches')).toBeVisible();
   await clickWorld(page,77,502); // present
   await expect(page.getByText('🎁 ✓')).toBeVisible({timeout:5000});
-  await clickWorld(page,70,62); // go around the chicken
-  await page.waitForTimeout(3300);
-  await clickWorld(page,195,62); // exit
+  await clickWorld(page,147,220); // line up with the narrow corridor
+  await page.waitForTimeout(2100);
+  await clickWorld(page,147,70); // pass the shrunken chicken
+  await page.waitForTimeout(1500);
+  await clickWorld(page,195,62); // enter the exit
   await expect(page.getByRole('heading',{name:'Sticker spectacular!'})).toBeVisible({timeout:5000});
   await page.screenshot({path:testInfo.outputPath('victory.png')});
   await page.reload();
@@ -98,7 +100,47 @@ test('moving puzzle goals respond to BOUNCY and FLOATING', async ({page}, testIn
   await page.waitForTimeout(500);
   await clickWorld(page,86,229); // FLOATING badge on the frog
   await clickWorld(page,235,270); // boulder crosses the pond
-  await expect(page.getByText('1/1 switches')).toBeVisible({timeout:5000});
+  await expect(page.getByText('1/1 switches')).toBeVisible({timeout:9000});
+});
+
+for (const puzzle of [
+  {number:7, sticker:'SLIPPERY', sourceY:229, targetY:270},
+  {number:8, sticker:'TINY', sourceY:230, targetY:270},
+  {number:11, sticker:'MAGNETIC', sourceY:222, targetY:270}
+]) {
+  test(`level ${puzzle.number} reaches its physical course switch`, async ({page}) => {
+    await page.goto('/');
+    await page.evaluate((progress) => localStorage.setItem('sticker-chaos-progress', JSON.stringify(progress)), {
+      ...DEFAULT_PROGRESS, completedLevels:Array.from({length:puzzle.number-1},(_,index)=>index+1)
+    });
+    await page.reload();
+    await page.getByRole('button',{name:/PLAY/}).first().click();
+    await page.getByRole('button',{name:new RegExp(`Level ${puzzle.number}:`)}).click();
+    await expect(page.locator('canvas')).toBeVisible();
+    await page.waitForTimeout(450);
+    await clickWorld(page,86,puzzle.number===8?270:puzzle.sourceY);
+    if (puzzle.number===8) await page.getByRole('button',{name:/TINY/}).click();
+    await clickWorld(page,294,puzzle.targetY);
+    await expect(page.getByText('1/1 switches')).toBeVisible({timeout:8000});
+  });
+}
+
+test('level 9 launches a BIG and BOUNCY ball into its barrier switch', async ({page}) => {
+  await page.goto('/');
+  await page.evaluate((progress) => localStorage.setItem('sticker-chaos-progress', JSON.stringify(progress)), {
+    ...DEFAULT_PROGRESS, completedLevels:Array.from({length:8},(_,index)=>index+1)
+  });
+  await page.reload();
+  await page.getByRole('button',{name:/PLAY/}).first().click();
+  await page.getByRole('button',{name:/Level 9:/}).click();
+  await expect(page.locator('canvas')).toBeVisible();
+  await page.waitForTimeout(450);
+  await clickWorld(page,86,207);
+  await clickWorld(page,294,380);
+  await expect(page.getByText('BIG stuck to the ball!')).toBeVisible();
+  await clickWorld(page,85,337);
+  await clickWorld(page,294,380);
+  await expect(page.getByText('1/1 switches')).toBeVisible({timeout:8000});
 });
 
 test('giant bouncing ball reaches the factory switch', async ({page}) => {

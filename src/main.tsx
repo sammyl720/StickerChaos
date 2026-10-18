@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Phaser from 'phaser';
 import { GameScene, type SceneStatus } from './game/GameScene';
-import { setMusicPaused, setMusicVolume, startMusic, stopMusic } from './game/audio';
+import { playSound, setMusicPaused, setMusicVolume, startMusic, stopMusic } from './game/audio';
 import { getLevel, LEVELS, WORLD_ICONS, WORLD_NAMES } from './game/levels';
 import { STICKER_INFO, STICKERS, type StickerType } from './game/model';
 import { useProgress } from './state/progress';
@@ -52,6 +52,7 @@ function GameScreen({ number, onBack, onNext }: { number:number; onBack:()=>void
   const [paused,setPaused] = useState(false);
   const [pauseSettings,setPauseSettings] = useState(false);
   const [result,setResult] = useState<{stars:number;gem:boolean}|null>(null);
+  const achievementsSeen = useRef(progress.achievements.length);
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<GameScene|null>(null);
   useEffect(() => {
@@ -81,6 +82,10 @@ function GameScreen({ number, onBack, onNext }: { number:number; onBack:()=>void
     // A level's game is intentionally mounted once; settings can be changed from the menu.
   },[number]);
   useEffect(() => { scene.current?.updateSettings(progress.settings); setMusicVolume(progress.settings.musicVolume); },[progress.settings]);
+  useEffect(() => {
+    if (progress.achievements.length > achievementsSeen.current) playSound('achievement',progress.settings.effectsVolume);
+    achievementsSeen.current = progress.achievements.length;
+  },[progress.achievements.length,progress.settings.effectsVolume]);
   const resume = () => {setPaused(false);setPauseSettings(false);setMusicPaused(false);scene.current?.setPaused(false);};
   const restart = () => {setResult(null);setPaused(false);setPauseSettings(false);setMusicPaused(false);scene.current?.setPaused(false);scene.current?.restart();};
   return <main className="game-screen">
@@ -91,7 +96,7 @@ function GameScreen({ number, onBack, onNext }: { number:number; onBack:()=>void
       <div className="sticker-tray">{status.selected?<><span className="tray-title">{status.selected.kind.toUpperCase()} STICKERS</span><div className="tray-stickers">{status.selected.stickers.length?status.selected.stickers.map((sticker)=><button key={sticker} className={`sticker-pill ${status.armed===sticker?'armed':''}`} style={{'--sticker':STICKER_INFO[sticker].color} as React.CSSProperties} onClick={()=>scene.current?.selectSticker(sticker)}>{STICKER_INFO[sticker].icon} {sticker}</button>):<span className="tray-empty">Tap a stickered object</span>}</div></>:<><span className="tray-title">HOW TO PLAY</span><span className="tray-empty">Tap an object, choose a sticker, then tap a new home. Or drag a sticker!</span></>}</div></div>
     </div>
     {paused && <div className="modal-backdrop"><div className="modal-card">{pauseSettings ? <><h2>Settings</h2><div className="pause-settings"><label>🎵 Music volume<input aria-label="Music volume" type="range" min="0" max="1" step="0.05" value={progress.settings.musicVolume} onChange={(event)=>setSettings({musicVolume:Number(event.target.value)})}/></label><label>🔊 Sound effects<input aria-label="Sound effects volume" type="range" min="0" max="1" step="0.05" value={progress.settings.effectsVolume} onChange={(event)=>setSettings({effectsVolume:Number(event.target.value)})}/></label><label className="pause-toggle">✨ Reduced motion<input type="checkbox" checked={progress.settings.reducedMotion} onChange={(event)=>setSettings({reducedMotion:event.target.checked})}/></label><label className="pause-toggle">🪶 Low graphics<input type="checkbox" checked={progress.settings.graphicsQuality==='low'} onChange={(event)=>setSettings({graphicsQuality:event.target.checked?'low':'standard'})}/></label><p>Graphics quality changes when you reopen a level.</p><div className="segmented"><button className={progress.settings.controlMode==='joystick'?'active':''} onClick={()=>setSettings({controlMode:'joystick'})}>Joystick</button><button className={progress.settings.controlMode==='tap'?'active':''} onClick={()=>setSettings({controlMode:'tap'})}>Tap to move</button></div></div><button className="secondary-button" onClick={()=>setPauseSettings(false)}>BACK TO PAUSE</button></> : <><div className="modal-icon">⏸️</div><h2>Taking a breather?</h2><p>Your sticker puzzle is right where you left it.</p><button className="primary-button" onClick={resume}>RESUME</button><button className="secondary-button" onClick={restart}>RESTART LEVEL</button><button className="secondary-button" onClick={()=>setPauseSettings(true)}>SETTINGS</button><button className="text-button" onClick={onBack}>WORLD MAP</button></>}</div></div>}
-    {result && <div className="modal-backdrop"><div className="modal-card victory"><div className="modal-icon">🎉</div><h2>Sticker spectacular!</h2><div className="big-stars">{'⭐'.repeat(result.stars)}{'☆'.repeat(3-result.stars)}</div><p>{result.gem?'You found the secret gem too!':'Try again to find the secret gem!'}</p><button className="primary-button" onClick={()=>number<20?onNext(number+1):onBack()}>{number<20?'NEXT LEVEL →':'WORLD MAP'}</button><button className="secondary-button" onClick={restart}>PLAY AGAIN</button></div></div>}
+    {result && <div className="modal-backdrop"><div className={`modal-card victory ${number===20?'finale':''}`}><div className="modal-icon">{number===20?'🐔🏳️':'🎉'}</div><h2>{number===20?'King Cluck surrendered!':'Sticker spectacular!'}</h2><div className="big-stars">{'⭐'.repeat(result.stars)}{'☆'.repeat(3-result.stars)}</div><p>{number===20?'Golden Bandit is yours!':result.gem?'You found the secret gem too!':'Try again to find the secret gem!'}</p><button className="primary-button" onClick={()=>number<20?onNext(number+1):onBack()}>{number<20?'NEXT LEVEL →':'WORLD MAP'}</button><button className="secondary-button" onClick={restart}>PLAY AGAIN</button></div></div>}
   </main>;
 }
 

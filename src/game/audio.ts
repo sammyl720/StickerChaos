@@ -10,9 +10,9 @@ function getContext(): AudioContext | null {
     return context;
   } catch { return null; }
 }
-export type SoundName = 'peel' | 'attach' | 'invalid' | 'treasure' | 'gem' | 'goal' | 'win' | 'bounce';
+export type SoundName = 'peel' | 'attach' | 'invalid' | 'treasure' | 'gem' | 'goal' | 'win' | 'bounce' | 'door' | 'grow' | 'shrink' | 'collision' | 'achievement' | 'boss';
 const notes: Record<SoundName, [number, number, OscillatorType]> = {
-  peel: [480, 0.10, 'triangle'], attach: [720, 0.16, 'sine'], invalid: [190, 0.2, 'sawtooth'], treasure: [880, 0.24, 'sine'], gem: [1180, 0.25, 'sine'], goal: [630, 0.23, 'triangle'], win: [990, 0.38, 'sine'], bounce: [360, 0.10, 'sine']
+  peel: [480, 0.10, 'triangle'], attach: [720, 0.16, 'sine'], invalid: [190, 0.2, 'sawtooth'], treasure: [880, 0.24, 'sine'], gem: [1180, 0.25, 'sine'], goal: [630, 0.23, 'triangle'], win: [990, 0.38, 'sine'], bounce: [360, 0.10, 'sine'], door: [520, 0.26, 'square'], grow: [460, 0.28, 'sine'], shrink: [760, 0.24, 'triangle'], collision: [135, 0.1, 'triangle'], achievement: [1045, 0.4, 'sine'], boss: [215, 0.35, 'sawtooth']
 };
 export function playSound(name: SoundName, volume: number): void {
   if (volume <= 0) return;
@@ -24,6 +24,9 @@ export function playSound(name: SoundName, volume: number): void {
   oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
   if (name === 'peel') oscillator.frequency.exponentialRampToValueAtTime(260, ctx.currentTime + duration);
   if (name === 'win') oscillator.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + duration);
+  if (name === 'grow') oscillator.frequency.exponentialRampToValueAtTime(920, ctx.currentTime + duration);
+  if (name === 'shrink') oscillator.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + duration);
+  if (name === 'boss') oscillator.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + duration);
   gain.gain.setValueAtTime(Math.min(0.16, volume * 0.18), ctx.currentTime);
   gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
   oscillator.connect(gain).connect(ctx.destination);

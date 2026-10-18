@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { createArt } from './art';
 import { playSound } from './audio';
 import { effectiveStats, STICKER_INFO, type EntityState, type GameSettings, type Goal, type Level, type StickerType } from './sceneTypes';
+import type { Fixture } from './model';
 import { StickerEngine } from './stickerEngine';
 
 export interface SceneStatus {
@@ -22,6 +23,7 @@ export interface SceneCallbacks {
   onComplete: (stars: number, gem: boolean, tiny: boolean) => void;
 }
 interface SpritePiece { sprite: Phaser.Physics.Arcade.Image; name: Phaser.GameObjects.Text; badges: Phaser.GameObjects.Text[]; shadow: Phaser.GameObjects.Ellipse }
+interface SolidFixture { definition: Fixture; object: Phaser.GameObjects.Rectangle; open: boolean }
 const W = 390, H = 620;
 const palette = [
   { sky: 0xffe9a8, ground: 0xb3e4a1, accent: 0x7dc979, dark: '#3c8b63' },
@@ -33,6 +35,9 @@ const palette = [
 export class GameScene extends Phaser.Scene {
   readonly engine: StickerEngine;
   private pieces = new Map<string, SpritePiece>();
+  private solids: SolidFixture[] = [];
+  private bossProps: Phaser.GameObjects.GameObject[] = [];
+  private bossPhase = 0;
   private goalMarks: Phaser.GameObjects.Arc[] = [];
   private goalActive: boolean[] = [];
   private selectedId: string | null = null;
@@ -53,6 +58,7 @@ export class GameScene extends Phaser.Scene {
   private costumeMark?: Phaser.GameObjects.Text;
   private tick = 0;
   private lastBounce = 0;
+  private lastCollisionSound = 0;
   private paused = false;
   private message = '';
 
@@ -63,7 +69,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private hasRoom(target: EntityState, radius: number): boolean {
-    return target.x - radius >= 12 && target.x + radius <= W - 12 && target.y - radius >= 33 && target.y + radius <= H - 12;
+    if (target.x - radius < 12 || target.x + radius > W - 12 || target.y - radius < 33 || target.y + radius > H - 12) return false;
+    return !this.solids.some(({ definition, open }) => {
+      if (open || definition.kind !== 'wall') return false;
+      const dx = Math.max(Math.abs(target.x - definition.x) - definition.w / 2, 0);
+      const dy = Math.max(Math.abs(target.y - definition.y) - definition.h / 2, 0);
+      return Math.hypot(dx, dy) < radius;
+    });
   }
 
   create(): void {
@@ -74,6 +86,7 @@ export class GameScene extends Phaser.Scene {
     this.addTreasure();
     this.addExit();
     for (const entity of this.engine.all()) this.addPiece(entity);
+    this.addFixtures();
     if (this.level.number === 14) this.addTinyPassage();
     if (this.level.number === 1) {
       this.tutorialFinger = this.add.text(240, 77, '☝️', { fontSize: '27px' }).setDepth(25);
@@ -154,10 +167,52 @@ export class GameScene extends Phaser.Scene {
       for (const piece of this.pieces.values()) this.physics.add.collider(piece.sprite, block);
     }
   }
+  private addFixtures(): void {
+    const colors = [0x70ab67, 0x6e87b6, 0x8b71b6, 0xae73cc];
+    for (const definition of this.level.fixtures) {
+      if (definition.kind === 'conveyor') {
+        this.add.rectangle(definition.x, definition.y, definition.w, definition.h, 0x657fc4, .65).setStrokeStyle(3, 0xe7faff, .9).setDepth(2);
+        const arrow = (definition.dx ?? 0) >= 0 ? '➜' : '⬅';
+        for (let x = definition.x - definition.w / 2 + 25; x < definition.x + definition.w / 2 - 10; x += 37) this.add.text(x, definition.y, arrow, { color: '#fff', fontSize: '19px' }).setOrigin(.5).setDepth(3);
+        continue;
+      }
+      if (definition.kind === 'hazard') {
+        this.add.rectangle(definition.x, definition.y, definition.w, definition.h, 0x69cbe7, .8).setStrokeStyle(4, 0xe4fcff, .9).setDepth(2);
+        for (let x = definition.x - definition.w / 2 + 17; x < definition.x + definition.w / 2; x += 35) this.add.text(x, definition.y, '〰', { color: '#e9ffff', fontSize: '20px' }).setOrigin(.5).setDepth(3);
+        continue;
+      }
+      const gate = definition.kind === 'gate';
+      const object = this.add.rectangle(definition.x, definition.y, definition.w, definition.h, gate ? 0xffc967 : colors[this.level.world - 1], .96).setStrokeStyle(3, 0xffffff, 1).setDepth(gate ? 8 : 4);
+      this.physics.add.existing(object, true);
+      for (const [id, piece] of this.pieces) if (!gate || id === 'player') this.physics.add.collider(piece.sprite, object);
+      this.solids.push({ definition, object, open: false });
+    }
+  }
+  private updateFixtures(): void {
+    const active = this.goalActive.filter(Boolean).length;
+    for (const fixture of this.solids) {
+      const shouldOpen = fixture.definition.opensAfter !== undefined && active >= fixture.definition.opensAfter;
+      if (fixture.open === shouldOpen) continue;
+      fixture.open = shouldOpen;
+      this.tweens.killTweensOf(fixture.object);
+      const body = fixture.object.body as Phaser.Physics.Arcade.StaticBody;
+      if (shouldOpen) {
+        body.enable = false;
+        if (this.settings.reducedMotion || this.settings.graphicsQuality === 'low') fixture.object.setVisible(false);
+        else this.tweens.add({ targets: fixture.object, scaleY: .05, alpha: 0, duration: 320, onComplete: () => fixture.object.setVisible(false) });
+        playSound('door', this.settings.effectsVolume);
+      } else {
+        fixture.object.setVisible(true).setScale(1).setAlpha(1);
+        body.updateFromGameObject();
+        body.enable = true;
+      }
+    }
+  }
   private addPiece(entity: EntityState): void {
     const stats = effectiveStats(entity);
     const shadow = this.add.ellipse(entity.x, entity.y + stats.radius * .7, stats.radius * 1.9, 11, 0x30245a, .16).setDepth(3);
-    const sprite = this.physics.add.image(entity.x, entity.y, `character-${entity.kind}`).setDepth(5);
+    const texture = this.level.number === 20 && entity.id === this.level.bossId ? 'boss-robot' : `character-${entity.kind}`;
+    const sprite = this.physics.add.image(entity.x, entity.y, texture).setDepth(5);
     if (entity.id === 'player') {
       const tints: Record<string, number> = { rainbow: 0xffc4ee, robot: 0xb5eaff, knight: 0xd4d9ff, golden: 0xffd765, chicken: 0xffeed1, 'tiny-crown': 0xebc7ff };
       if (tints[this.cosmetic]) sprite.setTint(tints[this.cosmetic]);
@@ -237,6 +292,9 @@ export class GameScene extends Phaser.Scene {
     this.burst(result.target.x, result.target.y, STICKER_INFO[sticker].color);
     this.callbacks.onTransfer(sticker, source?.kind ?? '', result.target.stickers);
     playSound('attach', this.settings.effectsVolume);
+    if (sticker === 'BIG') { playSound('grow', this.settings.effectsVolume); playSound('shrink', this.settings.effectsVolume * .55); }
+    if (sticker === 'TINY') playSound('shrink', this.settings.effectsVolume);
+    if (sourceId === this.level.bossId) this.reactBoss();
     if (this.level.number === 1) this.tutorialFinger?.setVisible(false);
     this.say(this.level.number === 1 ? 'Now grab the treasure!' : `${sticker} stuck to the ${result.target.kind}!`);
     this.checkGoals();
@@ -259,6 +317,65 @@ export class GameScene extends Phaser.Scene {
     }
     if (this.settings.graphicsQuality !== 'low') this.cameras.main.shake(75, .002);
   }
+  private reactBoss(): void {
+    const boss = this.level.bossId ? this.pieces.get(this.level.bossId)?.sprite : null;
+    if (!boss) return;
+    playSound('boss', this.settings.effectsVolume);
+    if (this.settings.reducedMotion) return;
+    const face = this.add.text(boss.x, boss.y - 68, ['😵', '😳', '🤯'][this.transfers % 3], { fontSize: '31px' }).setOrigin(.5).setDepth(35);
+    this.tweens.add({ targets: face, y: face.y - 30, alpha: 0, duration: 900, onComplete: () => face.destroy() });
+    this.tweens.add({ targets: boss, angle: 14, duration: 90, yoyo: true, repeat: 3, onComplete: () => boss.setAngle(0) });
+  }
+  private clearBossProps(): void {
+    this.bossProps.forEach((object) => { this.tweens.killTweensOf(object); object.destroy(); });
+    this.bossProps = [];
+    if (this.level.bossId) {
+      const boss = this.pieces.get(this.level.bossId)?.sprite;
+      boss?.setVisible(true);
+      if (boss?.body) boss.body.enable = true;
+    }
+  }
+  private updateBoss(): void {
+    const stage = this.goalActive.filter(Boolean).length;
+    if (stage === this.bossPhase) return;
+    this.clearBossProps();
+    this.bossPhase = stage;
+    if (!this.level.bossId || stage === 0) return;
+    const boss = this.pieces.get(this.level.bossId)?.sprite;
+    if (!boss) return;
+    if (this.level.number === 10) {
+      for (let i = -1; i <= 1; i++) this.bossProps.push(this.add.rectangle(boss.x + i * 30, boss.y, 7, 96, 0x9be5ff).setStrokeStyle(2, 0xffffff).setDepth(10));
+      this.bossProps.push(this.add.text(boss.x, boss.y - 72, 'TRAPPED!', { fontSize: '15px', color: '#fff', backgroundColor: '#586ac4', padding: { x: 5, y: 3 } }).setOrigin(.5).setDepth(11));
+      playSound('boss', this.settings.effectsVolume);
+    }
+    if (this.level.number === 15) {
+      this.bossProps.push(this.add.text(boss.x, boss.y - 74, '⚔️?!', { fontSize: '24px' }).setOrigin(.5).setDepth(12));
+    }
+    if (this.level.number === 20) {
+      if (stage < 3) {
+        const labels = ['', 'SUIT SHRINKING!', 'ENGINE STALLING!'];
+        this.bossProps.push(this.add.text(195, 33, labels[stage], { fontSize: '15px', color: '#fff9d5', backgroundColor: '#7654b5', padding: { x: 7, y: 3 } }).setOrigin(.5).setDepth(20));
+      } else {
+        boss.setVisible(false);
+        if (boss.body) boss.body.enable = false;
+        const pieces = ['⚙️', '🔩', '🦾', '🤖'];
+        pieces.forEach((symbol, index) => {
+          const angle = index * Math.PI / 2;
+          const part = this.add.text(boss.x, boss.y, symbol, { fontSize: '30px' }).setOrigin(.5).setDepth(18);
+          this.bossProps.push(part);
+          if (!this.settings.reducedMotion) this.tweens.add({ targets: part, x: boss.x + Math.cos(angle) * 62, y: boss.y + Math.sin(angle) * 60, angle: 160, duration: 700, ease: 'Cubic.easeOut' });
+        });
+        this.bossProps.push(this.add.text(boss.x, boss.y, '🐔🏳️', { fontSize: '31px' }).setOrigin(.5).setDepth(21));
+        if (!this.settings.reducedMotion) for (let i = 0; i < (this.settings.graphicsQuality === 'low' ? 8 : 24); i++) {
+          const x = 25 + (i * 43) % 345;
+          const confetti = this.add.rectangle(x, 25 + (i % 4) * 12, 7, 12, [0xffca57, 0xff80b4, 0x80e5db, 0xbf91ef][i % 4]).setDepth(24);
+          this.bossProps.push(confetti);
+          this.tweens.add({ targets: confetti, y: 540 + (i % 5) * 15, angle: i % 2 ? 280 : -280, duration: 1700 + i * 37, repeat: -1, onRepeat: () => confetti.setPosition(x, 20) });
+        }
+        playSound('boss', this.settings.effectsVolume);
+      }
+    }
+  }
   private say(message: string): void { this.message = message; this.emitStatus(); }
   private emitStatus(): void {
     this.callbacks.onStatus({ selected: this.selectedId ? this.engine.get(this.selectedId) ?? null : null, armed: this.armed, transfers: this.transfers, treasure: this.treasure, gem: this.gem, goals: this.goalActive.filter(Boolean).length, totalGoals: this.goalActive.length, message: this.message, canUndo: this.engine.undoCount > 0 });
@@ -272,6 +389,7 @@ export class GameScene extends Phaser.Scene {
         const push = Math.min(180, effectiveStats(first).pushForce / effectiveStats(second).mass);
         const dx = b.x - a.x, dy = b.y - a.y, length = Math.max(1,Math.hypot(dx,dy));
         b.setVelocity((b.body?.velocity.x ?? 0) + dx/length*push, (b.body?.velocity.y ?? 0) + dy/length*push);
+        if (impact > 95 && this.time.now - this.lastCollisionSound > 300) { this.lastCollisionSound = this.time.now; playSound('collision', this.settings.effectsVolume * .55); }
       }
     }
     if (ids.some((id) => id && this.engine.get(id)?.stickers.includes('BOUNCY'))) {
@@ -291,6 +409,8 @@ export class GameScene extends Phaser.Scene {
     });
     const open = this.goalActive.every(Boolean);
     this.exitGlow?.setFillStyle(open ? 0x85ecb4 : 0xffcf85, .85);
+    this.updateFixtures();
+    this.updateBoss();
     this.emitStatus();
   }
   setJoystick(x: number, y: number): void { this.moveVector = { x, y }; if (x || y) this.tapPoint = null; }
@@ -356,8 +476,10 @@ export class GameScene extends Phaser.Scene {
           } else piece.sprite.setAcceleration(0,0);
         }
       }
-      if ((this.level.number === 4 || this.level.number === 12) && !effectiveStats(entity).canFloat && piece.sprite.x > 110 && piece.sprite.x < 280 && piece.sprite.y > 335 && piece.sprite.y < 380) {
-        piece.sprite.setVelocity(piece.sprite.body?.velocity.x ?? 0, piece.sprite.y < 358 ? -105 : 105);
+      for (const fixture of this.level.fixtures) {
+        if (Math.abs(piece.sprite.x - fixture.x) > fixture.w / 2 || Math.abs(piece.sprite.y - fixture.y) > fixture.h / 2) continue;
+        if (fixture.kind === 'hazard' && !effectiveStats(entity).canFloat) piece.sprite.setVelocity(piece.sprite.body?.velocity.x ?? 0, piece.sprite.y < fixture.y ? -105 : 105);
+        if (fixture.kind === 'conveyor' && !effectiveStats(entity).canFloat) piece.sprite.setVelocity((piece.sprite.body?.velocity.x ?? 0) + (fixture.dx ?? 0) * .35, (piece.sprite.body?.velocity.y ?? 0) + (fixture.dy ?? 0) * .35);
       }
       this.engine.updateMotion(entity.id,piece.sprite.x,piece.sprite.y,piece.sprite.body?.velocity.x ?? 0,piece.sprite.body?.velocity.y ?? 0);
       const updated = this.engine.get(entity.id)!;
