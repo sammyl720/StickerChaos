@@ -31,6 +31,7 @@ async function clickWorld(page: import('@playwright/test').Page, x:number, y:num
 
 test('complete the first puzzle with a real sticker transfer and restore progress', async ({page}, testInfo) => {
   await page.goto('/');
+  await expect(page.getByRole('button',{name:/PLAY/}).first()).toBeVisible();
   await page.screenshot({path:testInfo.outputPath('home.png')});
   await page.getByRole('button',{name:/MY BANDIT/}).click();
   await page.screenshot({path:testInfo.outputPath('customization.png')});

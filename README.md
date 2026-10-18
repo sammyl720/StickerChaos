@@ -26,7 +26,7 @@ npx playwright install chromium webkit
 npm run test:e2e
 ```
 
-Playwright runs Chromium at desktop and emulated iPhone viewports, plus mobile WebKit. This is not a substitute for actual Safari testing on an iPhone or iPod touch.
+Playwright runs Chromium at desktop and emulated iPhone viewports, plus WebKit at iPhone 13 and compact 320×568 sizes. This is not a substitute for actual Safari testing on an iPhone or iPod touch.
 
 ## Sticker engine
 
