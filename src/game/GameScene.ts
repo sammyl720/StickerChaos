@@ -185,7 +185,7 @@ export class GameScene extends Phaser.Scene {
     body.setDrag(stats.drag, stats.drag);
     body.setBounce(stats.restitution);
     body.setCollideWorldBounds(true);
-    body.setMaxVelocity(Math.max(260, stats.speed * 2));
+    body.setMaxVelocity(Math.max(340, stats.speed * 2));
     piece.shadow.setSize(stats.radius * 1.9, 11).setAlpha(stats.canFloat ? .09 : .2);
     if (!this.settings.reducedMotion) {
       this.tweens.add({ targets: piece.sprite, scaleX: piece.sprite.scaleX * 1.12, scaleY: piece.sprite.scaleY * .88, duration: 120, yoyo: true });
@@ -230,7 +230,7 @@ export class GameScene extends Phaser.Scene {
     const launchGoal = this.level.goals.find((goal) => goal.targetId === targetId && Math.hypot(goal.x - result.target.x,goal.y - result.target.y) > goal.radius + 10);
     if (launchGoal && (sticker === 'BOUNCY' || sticker === 'SLIPPERY') && launchGoal.requires.every((value) => result.target.stickers.includes(value))) {
       const dx = launchGoal.x - result.target.x, dy = launchGoal.y - result.target.y, distance = Math.max(1,Math.hypot(dx,dy));
-      this.pieces.get(targetId)?.sprite.setVelocity(dx/distance*230,dy/distance*230);
+      this.pieces.get(targetId)?.sprite.setVelocity(dx/distance*300,dy/distance*300);
     }
     this.burst(result.target.x, result.target.y, STICKER_INFO[sticker].color);
     this.callbacks.onTransfer(sticker, source?.kind ?? '', result.target.stickers);
@@ -335,27 +335,21 @@ export class GameScene extends Phaser.Scene {
     for (const entity of this.engine.all()) {
       const piece = this.pieces.get(entity.id); if (!piece) continue;
       if (entity.id !== 'player') {
-        const attrs = effectiveStats(entity);
-        const destination = this.level.goals.find((goal) => goal.targetId === entity.id && goal.requires.every((sticker) => entity.stickers.includes(sticker)));
-        if (entity.behavior === 'activate' && destination) {
-          const dx = destination.x - piece.sprite.x, dy = destination.y - piece.sprite.y, distance = Math.hypot(dx,dy);
-          piece.sprite.setAcceleration(0,0);
-          if (distance > 8) piece.sprite.setVelocity(dx/distance*attrs.speed*1.7,dy/distance*attrs.speed*1.7);
-          else piece.sprite.setVelocity(0,0);
-        } else if (entity.stickers.includes('FAST') || entity.behavior === 'wander' || entity.behavior === 'patrol') {
-          const speed = entity.stickers.includes('FAST') ? attrs.speed * .58 : attrs.speed * .3;
-          const phase = this.tick * .001 + entity.id.length;
-          const dx = Math.cos(phase * .9), dy = Math.sin(phase * 1.15);
-          piece.sprite.setAcceleration(dx * speed * 3, dy * speed * 3);
-        } else piece.sprite.setAcceleration(0,0);
-        if (attrs.magneticRadius > 0) for (const other of this.engine.all()) {
-          if (other.id === entity.id || !['key','robot','knight','rock','boulder','crate'].includes(other.kind)) continue;
-          const otherPiece = this.pieces.get(other.id)!;
-          const dx = piece.sprite.x - otherPiece.sprite.x, dy = piece.sprite.y - otherPiece.sprite.y, distance = Math.hypot(dx,dy);
-          if (distance > 15 && distance < attrs.magneticRadius) {
-            const force = Math.min(135, 900 / Math.max(1,effectiveStats(other).mass));
-            otherPiece.sprite.setAcceleration(dx/distance * force, dy/distance * force);
-          }
+        if (this.armed) { piece.sprite.setAcceleration(0,0).setVelocity(0,0); }
+        else {
+          const attrs = effectiveStats(entity);
+          const destination = this.level.goals.find((goal) => goal.targetId === entity.id && goal.requires.every((sticker) => entity.stickers.includes(sticker)));
+          if (entity.behavior === 'activate' && destination) {
+            const dx = destination.x - piece.sprite.x, dy = destination.y - piece.sprite.y, distance = Math.hypot(dx,dy);
+            piece.sprite.setAcceleration(0,0);
+            if (distance > 8) piece.sprite.setVelocity(dx/distance*attrs.speed*1.7,dy/distance*attrs.speed*1.7);
+            else piece.sprite.setVelocity(0,0);
+          } else if (entity.stickers.includes('FAST') || entity.behavior === 'wander' || entity.behavior === 'patrol') {
+            const speed = entity.stickers.includes('FAST') ? attrs.speed * .58 : attrs.speed * .3;
+            const phase = this.tick * .001 + entity.id.length;
+            const dx = Math.cos(phase * .9), dy = Math.sin(phase * 1.15);
+            piece.sprite.setAcceleration(dx * speed * 3, dy * speed * 3);
+          } else piece.sprite.setAcceleration(0,0);
         }
       }
       if ((this.level.number === 4 || this.level.number === 12) && !effectiveStats(entity).canFloat && piece.sprite.x > 110 && piece.sprite.x < 280 && piece.sprite.y > 335 && piece.sprite.y < 380) {
@@ -368,6 +362,7 @@ export class GameScene extends Phaser.Scene {
       piece.shadow.setPosition(updated.x, updated.y + effectiveStats(updated).radius * .7);
       piece.badges.forEach((badge,index) => this.positionBadge(updated,badge,index));
     }
+    if (!this.armed) this.applyMagnetism();
     if (!this.treasure && Phaser.Math.Distance.Between(player.x,player.y,this.level.treasure.x,this.level.treasure.y) < 32) {
       this.treasure = true; this.treasureIcon?.setVisible(false); playSound('treasure',this.settings.effectsVolume); this.burst(player.x,player.y,'#ffcf70'); this.say('Treasure collected! Find the exit.');
     }
@@ -378,6 +373,28 @@ export class GameScene extends Phaser.Scene {
     if (this.treasure && this.goalActive.every(Boolean) && Phaser.Math.Distance.Between(player.x,player.y,this.level.exit.x,this.level.exit.y) < 33) {
       this.completed = true; const stars = 1 + Number(this.transfers <= this.level.par) + Number(this.gem);
       playSound('win',this.settings.effectsVolume); this.callbacks.onComplete(stars,this.gem,playerState.stickers.includes('TINY'));
+    }
+  }
+
+  private applyMagnetism(): void {
+    const forces = new Map<string,{x:number;y:number}>();
+    for (const magnet of this.engine.all()) {
+      const radius = effectiveStats(magnet).magneticRadius;
+      if (!radius) continue;
+      for (const other of this.engine.all()) {
+        if (other.id === magnet.id || !['key','robot','knight','rock','boulder','crate'].includes(other.kind)) continue;
+        const dx = magnet.x-other.x, dy = magnet.y-other.y, distance = Math.hypot(dx,dy);
+        if (distance < 16 || distance >= radius) continue;
+        const force = Math.min(135,900/Math.max(1,effectiveStats(other).mass));
+        const current = forces.get(other.id) ?? {x:0,y:0};
+        forces.set(other.id,{x:current.x+dx/distance*force,y:current.y+dy/distance*force});
+      }
+    }
+    for (const [id,force] of forces) {
+      const sprite = this.pieces.get(id)?.sprite; if (!sprite) continue;
+      const body = sprite.body as Phaser.Physics.Arcade.Body;
+      const length = Math.max(1,Math.hypot(force.x,force.y));
+      sprite.setAcceleration(body.acceleration.x + force.x/length*Math.min(135,length),body.acceleration.y + force.y/length*Math.min(135,length));
     }
   }
 }

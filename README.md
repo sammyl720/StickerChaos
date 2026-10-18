@@ -36,7 +36,7 @@ Levels are validated with Zod in `src/game/levels.ts`. Each has a documented tra
 
 ## Saving and offline play
 
-A versioned save is stored in IndexedDB; localStorage is used if IndexedDB is unavailable. Invalid saved data falls back to a clean save. The PWA service worker precaches the production app and assets. After one successful online load, the game can be launched offline on the same device.
+A versioned save is written immediately to localStorage and mirrored to IndexedDB. This keeps a change made just before a reload while retaining a second local copy. Invalid saved data falls back to a clean save. The PWA service worker precaches the production app and assets. After one successful online load, the game can be launched offline on the same device.
 
 ## Deployment
 

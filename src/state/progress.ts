@@ -100,15 +100,19 @@ interface ProgressStore {
 function commit(progress: GameProgress): GameProgress {
   progress.achievements = unlockedAchievements(progress);
   progress.unlockedCosmetics = unlockedCosmetics(progress);
-  void writeStored(progress).catch(() => { try { localStorage.setItem(DATABASE, JSON.stringify(progress)); } catch { /* storage may be disabled */ } });
+  // The synchronous mirror makes a just-changed setting survive an immediate reload.
+  try { localStorage.setItem(DATABASE, JSON.stringify(progress)); } catch { /* storage may be disabled */ }
+  void writeStored(progress).catch(() => { /* the local mirror remains available */ });
   return progress;
 }
 export const useProgress = create<ProgressStore>((set, get) => ({
   ready: false,
   progress: freshProgress(),
   load: async () => {
-    let raw: unknown;
-    try { raw = await readStored(); } catch { try { raw = JSON.parse(localStorage.getItem(DATABASE) || 'null'); } catch { raw = null; } }
+    let local: unknown;
+    try { local = JSON.parse(localStorage.getItem(DATABASE) || 'null'); } catch { local = null; }
+    let raw: unknown = ProgressSchema.safeParse(local).success ? local : null;
+    if (!raw) { try { raw = await readStored(); } catch { raw = null; } }
     set({ progress: parseProgress(raw), ready: true });
   },
   setSettings: (patch) => set({ progress: commit({ ...get().progress, settings: { ...get().progress.settings, ...patch } }) }),
