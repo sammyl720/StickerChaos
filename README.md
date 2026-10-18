@@ -22,11 +22,11 @@ npm run typecheck
 npm run lint
 npm run test
 npm run build
-npx playwright install chromium
+npx playwright install chromium webkit
 npm run test:e2e
 ```
 
-Playwright runs Chromium at desktop and emulated iPhone viewports. This is not a substitute for actual Safari testing on an iPhone or iPod touch.
+Playwright runs Chromium at desktop and emulated iPhone viewports, plus mobile WebKit. This is not a substitute for actual Safari testing on an iPhone or iPod touch.
 
 ## Sticker engine
 

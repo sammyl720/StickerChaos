@@ -234,3 +234,26 @@ test('final robot king powers all three switches', async ({page}) => {
     await expect(page.getByText(goals)).toBeVisible({timeout:3000});
   }
 });
+
+test('earned costume and sticker discoveries survive reopening', async ({page}) => {
+  await page.goto('/');
+  await page.evaluate((progress) => localStorage.setItem('sticker-chaos-progress', JSON.stringify(progress)), {
+    ...DEFAULT_PROGRESS,
+    completedLevels:[1,2,3,4,5],
+    unlockedCosmetics:['classic','rainbow'],
+    achievements:['first-sticker'],
+    stickerDiscoveries:['BIG'],
+    transfers:1
+  });
+  await page.reload();
+  await page.getByRole('button',{name:/MY BANDIT/}).click();
+  await page.getByRole('button',{name:/Rainbow Hat/}).click();
+  await expect(page.getByRole('heading',{name:'Rainbow Hat'})).toBeVisible();
+  await page.reload();
+  await page.getByRole('button',{name:/MY BANDIT/}).click();
+  await expect(page.getByRole('heading',{name:'Rainbow Hat'})).toBeVisible();
+  await page.getByRole('button',{name:'Back'}).click();
+  await page.getByRole('button',{name:/STICKER BOOK/}).click();
+  await expect(page.getByRole('heading',{name:'BIG ✓'})).toBeVisible();
+  await expect(page.getByText('First Sticker')).toBeVisible();
+});
