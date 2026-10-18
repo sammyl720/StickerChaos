@@ -204,3 +204,33 @@ test('the chicken king boss needs two stickers on one rock', async ({page}) => {
   await clickWorld(page,294,270);
   await expect(page.getByText('1/1 switches')).toBeVisible();
 });
+
+test('final robot king powers all three switches', async ({page}) => {
+  await page.goto('/');
+  await page.evaluate((progress) => localStorage.setItem('sticker-chaos-progress', JSON.stringify(progress)), {
+    ...DEFAULT_PROGRESS, completedLevels:Array.from({length:19},(_,index)=>index+1)
+  });
+  await page.reload();
+  await page.getByRole('button',{name:/PLAY/}).first().click();
+  await page.getByRole('button',{name:/Level 20:/}).click();
+  await expect(page.locator('canvas')).toBeVisible();
+  await page.waitForTimeout(500);
+  for (const [sticker,targetX,targetY,goals] of [
+    ['BIG',300,165,'1/3 switches'],
+    ['FAST',300,290,'2/3 switches'],
+    ['HEAVY',300,415,'3/3 switches']
+  ] as const) {
+    const pill = page.getByRole('button',{name:new RegExp(sticker)});
+    for (const y of [270,290,240]) {
+      for (const x of [85,110,135,160,185,210]) {
+        if (await pill.isVisible()) break;
+        await clickWorld(page,x,y);
+        await page.waitForTimeout(50);
+      }
+      if (await pill.isVisible()) break;
+    }
+    await pill.click({timeout:3000});
+    await clickWorld(page,targetX,targetY);
+    await expect(page.getByText(goals)).toBeVisible({timeout:3000});
+  }
+});

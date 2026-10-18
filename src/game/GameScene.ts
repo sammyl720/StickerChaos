@@ -226,7 +226,7 @@ export class GameScene extends Phaser.Scene {
     const source = this.engine.get(sourceId);
     const result = this.engine.transfer(sourceId, targetId, sticker);
     if (!result.ok) { this.say(this.errorText(result.reason)); playSound('invalid', this.settings.effectsVolume); this.shake(targetId); return; }
-    this.selectedId = null; this.armed = null; this.transfers++;
+    this.selectedId = result.source.stickers.length ? sourceId : null; this.armed = null; this.transfers++;
     this.applyStats(sourceId); this.applyStats(targetId);
     this.updateBadges(sourceId); this.updateBadges(targetId);
     const launchGoal = this.level.goals.find((goal) => goal.targetId === targetId && Math.hypot(goal.x - result.target.x,goal.y - result.target.y) > goal.radius + 10);
