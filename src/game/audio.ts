@@ -2,6 +2,7 @@ let context: AudioContext | null = null;
 let musicTimer: number | null = null;
 let musicStep = 0;
 let musicPaused = false;
+let musicVolume = 0;
 function getContext(): AudioContext | null {
   try {
     context ??= new AudioContext();
@@ -46,15 +47,15 @@ function musicNote(frequency: number, volume: number): void {
   oscillator.connect(gain).connect(ctx.destination); oscillator.start(now); oscillator.stop(now + .27);
 }
 export function startMusic(world: number, volume: number): void {
-  stopMusic(); musicStep = 0; musicPaused = false;
-  if (volume <= 0) return;
+  stopMusic(); musicStep = 0; musicPaused = false; musicVolume = volume;
   musicTimer = window.setInterval(() => {
     if (musicPaused) return;
     const melody = melodies[Math.max(0,Math.min(3,world-1))];
-    musicNote(melody[musicStep % melody.length],volume);
-    if (musicStep % 4 === 0) musicNote(melody[musicStep % melody.length] / 2,volume * .5);
+    musicNote(melody[musicStep % melody.length],musicVolume);
+    if (musicStep % 4 === 0) musicNote(melody[musicStep % melody.length] / 2,musicVolume * .5);
     musicStep++;
   }, 315);
 }
 export function setMusicPaused(value: boolean): void { musicPaused = value; }
+export function setMusicVolume(value: number): void { musicVolume = value; }
 export function stopMusic(): void { if (musicTimer !== null) window.clearInterval(musicTimer); musicTimer = null; }

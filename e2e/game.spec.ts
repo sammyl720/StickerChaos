@@ -13,9 +13,14 @@ test('start, transfer, undo, restart, and save settings', async ({page}) => {
   await page.getByRole('button',{name:/RESTART/}).click();
   await page.getByRole('button',{name:'Pause'}).click();
   await expect(page.getByRole('heading',{name:'Taking a breather?'})).toBeVisible();
+  await page.getByRole('button',{name:'SETTINGS',exact:true}).click();
+  await page.getByLabel('🪶 Low graphics').check();
+  await page.getByRole('button',{name:'Tap to move'}).click();
+  await page.getByRole('button',{name:'BACK TO PAUSE'}).click();
   await page.getByRole('button',{name:'WORLD MAP'}).click();
   await page.getByRole('button',{name:'Back'}).click();
   await page.getByRole('button',{name:/SETTINGS/}).click();
+  await expect(page.getByLabel('🪶 Low graphics')).toBeChecked();
   await page.getByRole('button',{name:'Tap to move'}).click();
   await page.reload();
   await page.getByRole('button',{name:/SETTINGS/}).click();

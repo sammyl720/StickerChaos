@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { z } from 'zod';
 import type { StickerType } from '../game/model';
 
-const SettingsSchema = z.object({ musicVolume: z.number().min(0).max(1), effectsVolume: z.number().min(0).max(1), reducedMotion: z.boolean(), controlMode: z.enum(['joystick', 'tap']) });
+const SettingsSchema = z.object({ musicVolume: z.number().min(0).max(1), effectsVolume: z.number().min(0).max(1), reducedMotion: z.boolean(), controlMode: z.enum(['joystick', 'tap']), graphicsQuality: z.enum(['standard', 'low']).default('standard') });
 const ProgressSchema = z.object({
   version: z.literal(1),
   completedLevels: z.array(z.number().int().min(1).max(20)),
@@ -26,7 +26,7 @@ export const DEFAULT_PROGRESS: GameProgress = {
   version: 1, completedLevels: [], levelStars: {}, collectedGems: [],
   unlockedCosmetics: ['classic'], selectedCosmetic: 'classic', achievements: [], stickerDiscoveries: [],
   transfers: 0, chickenTransforms: 0, bounceCollisions: 0, combinations: [], tinyWins: 0,
-  settings: { musicVolume: 0.35, effectsVolume: 0.7, reducedMotion: false, controlMode: 'joystick' }
+  settings: { musicVolume: 0.35, effectsVolume: 0.7, reducedMotion: false, controlMode: 'joystick', graphicsQuality: 'standard' }
 };
 
 const DATABASE = 'sticker-chaos-progress';

@@ -251,12 +251,13 @@ export class GameScene extends Phaser.Scene {
   }
   private burst(x: number, y: number, color: string): void {
     if (this.settings.reducedMotion) return;
-    for (let i = 0; i < 10; i++) {
+    const count = this.settings.graphicsQuality === 'low' ? 4 : 10;
+    for (let i = 0; i < count; i++) {
       const star = this.add.circle(x, y, i % 2 ? 4 : 6, Phaser.Display.Color.HexStringToColor(color).color).setDepth(30);
-      const angle = (i / 10) * Math.PI * 2;
+      const angle = (i / count) * Math.PI * 2;
       this.tweens.add({ targets: star, x: x + Math.cos(angle) * 54, y: y + Math.sin(angle) * 54, alpha: 0, scale: .2, duration: 500, onComplete: () => star.destroy() });
     }
-    this.cameras.main.shake(75, .002);
+    if (this.settings.graphicsQuality !== 'low') this.cameras.main.shake(75, .002);
   }
   private say(message: string): void { this.message = message; this.emitStatus(); }
   private emitStatus(): void {
@@ -293,6 +294,7 @@ export class GameScene extends Phaser.Scene {
     this.emitStatus();
   }
   setJoystick(x: number, y: number): void { this.moveVector = { x, y }; if (x || y) this.tapPoint = null; }
+  updateSettings(settings: GameSettings): void { this.settings = settings; }
   setPaused(value: boolean): void { this.paused = value; if (value) this.physics.pause(); else this.physics.resume(); }
   undo(): void {
     if (!this.engine.undo()) { this.say('Nothing to undo yet.'); return; }
