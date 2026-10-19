@@ -34,6 +34,22 @@ async function clickWorld(page: import('@playwright/test').Page, x:number, y:num
   await canvas.click({position:{x:x*bounds.width/390,y:y*bounds.height/620}});
 }
 
+test('all four worlds render their level scenery', async ({page}, testInfo) => {
+  for (const [world, level] of [[1, 1], [2, 6], [3, 11], [4, 16]] as const) {
+    await page.goto('/');
+    await page.evaluate((progress) => localStorage.setItem('sticker-chaos-progress', JSON.stringify(progress)), {
+      ...DEFAULT_PROGRESS,
+      completedLevels: Array.from({length:level-1}, (_, index) => index+1)
+    });
+    await page.reload();
+    await page.getByRole('button', {name:/PLAY/}).first().click();
+    await page.getByRole('button', {name:new RegExp(`Level ${level}:`)}).click();
+    await expect(page.locator('canvas')).toBeVisible();
+    await page.waitForTimeout(300);
+    await page.screenshot({path:testInfo.outputPath(`world-${world}.png`)});
+  }
+});
+
 test('complete the first puzzle with a real sticker transfer and restore progress', async ({page}, testInfo) => {
   await page.goto('/');
   await expect(page.getByRole('button',{name:/PLAY/}).first()).toBeVisible();

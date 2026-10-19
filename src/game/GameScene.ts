@@ -143,7 +143,101 @@ export class GameScene extends Phaser.Scene {
       g.lineStyle(8, 0x7ed7df, .3).lineBetween(20, 350, 369, 350);
     }
     g.fillStyle(0xffffff, .18).fillRoundedRect(18, 42, 354, 560, 30);
+    this.drawWorldDetails();
     this.add.text(195, 42, `WORLD ${this.level.world}  •  ${this.level.number.toString().padStart(2, '0')}`, { fontFamily: 'Trebuchet MS, sans-serif', fontSize: '12px', color: p.dark, fontStyle: 'bold' }).setOrigin(.5).setDepth(2);
+  }
+
+  private drawWorldDetails(): void {
+    // All scenery sits behind the interactive objects and leaves the middle of the arena clear.
+    const g = this.add.graphics().setDepth(0);
+    if (this.level.world === 1) {
+      for (const [x, y, roof] of [[30, 177, 0xef7f9c], [318, 187, 0x8d85d8]] as const) {
+        g.fillStyle(0xfff2d8, .95).fillRoundedRect(x, y, 48, 49, 7);
+        g.lineStyle(3, 0x8a6a83, .7).strokeRoundedRect(x, y, 48, 49, 7);
+        g.fillStyle(roof).fillTriangle(x - 5, y + 2, x + 24, y - 23, x + 53, y + 2);
+        g.fillStyle(0x9bd6e1).fillRoundedRect(x + 7, y + 15, 13, 15, 4);
+        g.fillStyle(0xc18361).fillRoundedRect(x + 28, y + 23, 14, 26, 4);
+        g.fillStyle(0xffe892).fillCircle(x + 39, y + 36, 2);
+      }
+      for (const [x, y] of [[38, 427], [350, 389]] as const) {
+        g.fillStyle(0x92664e).fillRoundedRect(x - 5, y - 2, 10, 32, 3);
+        g.fillStyle(0x65bc82).fillCircle(x, y - 17, 23);
+        g.fillStyle(0x83d49c).fillCircle(x - 8, y - 24, 11);
+        g.fillStyle(0x375d50).fillCircle(x - 8, y - 13, 2).fillCircle(x + 8, y - 13, 2);
+        g.lineStyle(2, 0x375d50).arc(x, y - 8, 6, 0.15, Math.PI - 0.15).strokePath();
+      }
+      g.fillStyle(0xf6d9a2).fillRoundedRect(331, 479, 9, 21, 4);
+      g.fillStyle(0xf47183).fillCircle(335, 476, 16);
+      for (const [x, y] of [[327, 472], [340, 467], [336, 481]] as const) g.fillStyle(0xfff4d9).fillCircle(x, y, 3);
+      for (const [x, y] of [[42, 311], [345, 329], [50, 552], [340, 560]] as const) {
+        g.fillStyle(0xffb5cc).fillCircle(x - 4, y, 4).fillCircle(x + 4, y, 4).fillCircle(x, y - 4, 4).fillCircle(x, y + 4, 4);
+        g.fillStyle(0xffe891).fillCircle(x, y, 3);
+      }
+    } else if (this.level.world === 2) {
+      g.fillStyle(0x6b86a9, .35).fillRoundedRect(20, 471, 350, 76, 12);
+      for (let x = 34; x < 354; x += 47) g.fillStyle(0xffe993, .85).fillRoundedRect(x, 507, 24, 5, 2);
+      for (const [x, y, color] of [[25, 178, 0xff82b5], [321, 190, 0x86eeea]] as const) {
+        g.fillStyle(0x526b9f).fillRoundedRect(x, y, 44, 62, 6);
+        g.lineStyle(3, color).strokeRoundedRect(x + 4, y + 6, 36, 22, 4);
+        g.fillStyle(color).fillRoundedRect(x + 9, y + 12, 25, 7, 3);
+        g.fillStyle(0xbfe9f4).fillRoundedRect(x + 9, y + 37, 25, 17, 3);
+      }
+      for (const [x, y] of [[35, 337], [345, 338], [338, 444]] as const) {
+        g.fillStyle(0xff906c).fillTriangle(x - 11, y + 15, x, y - 15, x + 11, y + 15);
+        g.fillStyle(0xffefcc).fillRoundedRect(x - 7, y + 2, 14, 5, 2);
+        g.fillStyle(0x596787).fillRoundedRect(x - 13, y + 14, 26, 5, 2);
+      }
+      this.addGear(37, 413, 17, 0x678bbd);
+      this.addGear(350, 273, 16, 0x6686b9);
+    } else if (this.level.world === 3) {
+      for (const x of [19, 348]) {
+        g.fillStyle(0x788ab0, .65).fillRoundedRect(x, 160, 25, 374, 5);
+        for (let y = 171; y < 520; y += 43) {
+          g.lineStyle(2, 0xdce5f1, .55).lineBetween(x, y, x + 25, y);
+          g.lineStyle(2, 0xdce5f1, .35).lineBetween(x + (Math.floor(y / 43) % 2 ? 7 : 17), y, x + (Math.floor(y / 43) % 2 ? 7 : 17), y + 40);
+        }
+      }
+      for (const [x, y, color] of [[52, 242, 0xee819d], [303, 263, 0x78cde1]] as const) {
+        g.fillStyle(0x6b538d).fillRoundedRect(x, y, 35, 48, 4);
+        g.fillStyle(color).fillTriangle(x + 4, y + 5, x + 31, y + 5, x + 17, y + 39);
+        g.fillStyle(0xffe9ac).fillCircle(x + 17, y + 15, 4);
+      }
+      for (const [x, y] of [[48, 397], [334, 408]] as const) {
+        g.fillStyle(0x6a5b7e).fillRoundedRect(x - 6, y, 12, 27, 3);
+        g.fillStyle(0xffe4a3, .55).fillCircle(x, y - 4, 17);
+        g.fillStyle(0xffb75f).fillTriangle(x - 7, y, x, y - 24, x + 7, y);
+      }
+      g.fillStyle(0x735d90, .4).fillRoundedRect(145, 550, 100, 23, 4);
+      g.lineStyle(3, 0xd8b578, .8).lineBetween(155, 555, 235, 555);
+    } else {
+      for (const [x, bend, color] of [[25, 127, 0x67dce6], [365, 261, 0xe599f5]] as const) {
+        g.lineStyle(9, color, .5).lineBetween(x, 101, x, 525);
+        g.lineStyle(6, color, .5).lineBetween(x, bend, x < 195 ? 72 : 319, bend);
+        for (const y of [169, 317, 472]) g.fillStyle(0xf7edff, .8).fillCircle(x, y, 5);
+      }
+      for (const [x, y, color] of [[42, 231, 0x78f1e5], [309, 380, 0xf2a7f3]] as const) {
+        g.fillStyle(0x4c397d).fillRoundedRect(x, y, 43, 59, 7);
+        g.lineStyle(3, color).strokeRoundedRect(x + 5, y + 7, 33, 22, 4);
+        g.fillStyle(color).fillRoundedRect(x + 8, y + 14, 27, 6, 3);
+        g.fillStyle(0xffd97a).fillCircle(x + 13, y + 43, 4).fillCircle(x + 30, y + 43, 4);
+      }
+      this.addGear(53, 419, 20, 0xc48de9);
+      this.addGear(339, 204, 23, 0x89e7ee);
+      g.lineStyle(4, 0xffdb87, .6).lineBetween(91, 568, 301, 568);
+      for (let x = 110; x < 300; x += 48) g.fillStyle(0xffdb87, .7).fillCircle(x, 568, 5);
+    }
+  }
+
+  private addGear(x: number, y: number, radius: number, color: number): void {
+    const gear = this.add.graphics({ x, y }).setDepth(0);
+    gear.fillStyle(color, .65);
+    for (let i = 0; i < 8; i++) {
+      const angle = i * Math.PI / 4;
+      gear.fillRoundedRect(Math.cos(angle) * radius - 5, Math.sin(angle) * radius - 5, 10, 10, 2);
+    }
+    gear.fillCircle(0, 0, radius * .8);
+    gear.fillStyle(0xf6e9ff, .72).fillCircle(0, 0, radius * .27);
+    if (!this.settings.reducedMotion && this.settings.graphicsQuality !== 'low') this.tweens.add({ targets: gear, angle: 360, duration: 11000, repeat: -1 });
   }
 
   private addGoal(goal: Goal): void {
