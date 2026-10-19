@@ -3,6 +3,7 @@ import { createArt } from './art';
 import { playSound } from './audio';
 import { effectiveStats, STICKER_INFO, type EntityState, type GameSettings, type Goal, type Level, type StickerType } from './sceneTypes';
 import type { Fixture } from './model';
+import { findTapRoute, type Point } from './navigation';
 import { StickerEngine } from './stickerEngine';
 
 export interface SceneStatus {
@@ -46,7 +47,7 @@ export class GameScene extends Phaser.Scene {
   private armed: StickerType | null = null;
   private drag: { source: string; sticker: StickerType; x: number; y: number; ghost: Phaser.GameObjects.Text } | null = null;
   private moveVector = { x: 0, y: 0 };
-  private tapPoint: { x: number; y: number } | null = null;
+  private tapRoute: Point[] = [];
   private keys?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd?: { W: Phaser.Input.Keyboard.Key; A: Phaser.Input.Keyboard.Key; S: Phaser.Input.Keyboard.Key; D: Phaser.Input.Keyboard.Key };
   private treasure = false;
@@ -116,7 +117,7 @@ export class GameScene extends Phaser.Scene {
       else this.say('Drop the sticker on an object.');
     });
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
-      if (over.length === 0 && this.settings.controlMode === 'tap') this.tapPoint = { x: pointer.worldX, y: pointer.worldY };
+      if (over.length === 0 && this.settings.controlMode === 'tap') this.moveToTap({ x: pointer.worldX, y: pointer.worldY });
     });
     this.events.on('pause', () => { this.paused = true; });
     this.events.on('resume', () => { this.paused = false; });
@@ -567,7 +568,20 @@ export class GameScene extends Phaser.Scene {
     this.updateBoss();
     this.emitStatus();
   }
-  setJoystick(x: number, y: number): void { this.moveVector = { x, y }; if (x || y) this.tapPoint = null; }
+  private moveToTap(destination: Point): void {
+    const player = this.engine.get('player');
+    if (!player) return;
+    const obstacles = this.engine.all().filter((entity) => entity.id !== 'player').map((entity) => ({
+      x: entity.x, y: entity.y, radius: effectiveStats(entity).radius
+    }));
+    const route = findTapRoute(
+      {x: player.x, y: player.y}, destination, effectiveStats(player).radius,
+      this.level.fixtures, this.goalActive.filter(Boolean).length, obstacles, effectiveStats(player).canFloat
+    );
+    this.tapRoute = route ?? [];
+    if (!route) this.say('That way is blocked. Try a switch first!');
+  }
+  setJoystick(x: number, y: number): void { this.moveVector = { x, y }; if (x || y) this.tapRoute = []; }
   updateSettings(settings: GameSettings): void { this.settings = settings; }
   setPaused(value: boolean): void { this.paused = value; if (value) this.physics.pause(); else this.physics.resume(); }
   undo(): void {
@@ -579,6 +593,7 @@ export class GameScene extends Phaser.Scene {
       this.applyStats(entity.id); this.updateBadges(entity.id);
     }
     this.transfers = Math.max(0,this.transfers-1); this.armed = null; this.selectedId = null;
+    this.tapRoute = [];
     this.goalActive = this.goalHistory.pop() ?? this.level.goals.map(() => false);
     this.lastTransferTarget = null;
     this.goalMarks.forEach((mark,index) => mark.setFillStyle(this.goalActive[index] ? 0x75e0ae : 0xffe186, this.goalActive[index] ? .85 : .64));
@@ -588,6 +603,7 @@ export class GameScene extends Phaser.Scene {
     this.completionTimer?.remove(); this.completionTimer = undefined;
     this.engine.resetLevel(); this.treasure = false; this.gem = false; this.transfers = 0; this.completed = false; this.armed = null; this.selectedId = null;
     this.goalHistory = []; this.lastTransferTarget = null;
+    this.tapRoute = [];
     this.treasureIcon?.setVisible(true); this.gemIcon?.setVisible(true);
     this.tutorialFinger?.setVisible(true);
     for (const entity of this.engine.all()) { const piece = this.pieces.get(entity.id); if (!piece) continue; piece.sprite.setPosition(entity.x,entity.y).setVelocity(0,0); this.applyStats(entity.id); this.updateBadges(entity.id); }
@@ -606,10 +622,14 @@ export class GameScene extends Phaser.Scene {
     if (this.keys?.right.isDown || this.wasd?.D.isDown) x = 1;
     if (this.keys?.up.isDown || this.wasd?.W.isDown) y = -1;
     if (this.keys?.down.isDown || this.wasd?.S.isDown) y = 1;
-    if (!x && !y && this.tapPoint) {
-      const dx = this.tapPoint.x - player.x, dy = this.tapPoint.y - player.y, distance = Math.hypot(dx,dy);
-      if (distance < 7) this.tapPoint = null;
-      else { x = dx/distance; y = dy/distance; }
+    if (x || y) this.tapRoute = [];
+    if (!x && !y && this.tapRoute.length) {
+      while (this.tapRoute.length && Math.hypot(this.tapRoute[0].x - player.x, this.tapRoute[0].y - player.y) < 3) this.tapRoute.shift();
+      if (this.tapRoute.length) {
+        const dx = this.tapRoute[0].x - player.x, dy = this.tapRoute[0].y - player.y;
+        const distance = Math.hypot(dx, dy);
+        x = dx / distance; y = dy / distance;
+      }
     }
     const length = Math.max(1,Math.hypot(x,y));
     if (playerState.stickers.includes('SLIPPERY')) player.setAcceleration(x/length * stats.speed * 3, y/length * stats.speed * 3);

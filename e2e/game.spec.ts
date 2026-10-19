@@ -81,12 +81,8 @@ test('complete the first puzzle with a real sticker transfer and restore progres
   await expect(page.getByText('1/1 switches')).toBeVisible();
   await clickWorld(page,77,502); // present
   await expect(page.getByText('🎁 ✓')).toBeVisible({timeout:5000});
-  await clickWorld(page,147,220); // line up with the narrow corridor
-  await page.waitForTimeout(2100);
-  await clickWorld(page,147,70); // pass the shrunken chicken
-  await page.waitForTimeout(1500);
-  await clickWorld(page,195,62); // enter the exit
-  await expect(page.getByRole('heading',{name:'Sticker spectacular!'})).toBeVisible({timeout:5000});
+  await clickWorld(page,195,62); // tap navigation finds the narrow corridor
+  await expect(page.getByRole('heading',{name:'Sticker spectacular!'})).toBeVisible({timeout:9000});
   await page.screenshot({path:testInfo.outputPath('victory.png')});
   await page.reload();
   await page.getByRole('button',{name:/KEEP PLAYING/}).click();
@@ -242,10 +238,9 @@ test('TINY player fits through the castle passage and wins', async ({page}, test
   await expect(page.getByText('1/1 switches')).toBeVisible();
   await clickWorld(page,77,502); // treasure
   await expect(page.getByText('🎁 ✓')).toBeVisible({timeout:5000});
-  await clickWorld(page,195,255); // align with the narrow gap
+  await clickWorld(page,195,62); // tap navigation finds the tiny gap
   await page.waitForTimeout(1600);
   await page.screenshot({path:testInfo.outputPath('tiny-passage.png')});
-  await clickWorld(page,195,62); // pass through to the exit
   await page.waitForTimeout(1800);
   await page.screenshot({path:testInfo.outputPath('after-passage.png')});
   await expect(page.getByRole('heading',{name:'Sticker spectacular!'})).toBeVisible({timeout:5000});
