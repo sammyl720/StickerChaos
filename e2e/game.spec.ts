@@ -256,13 +256,22 @@ test('the chicken king boss needs two stickers on one rock', async ({page}) => {
 test('final robot king powers all three switches', async ({page}) => {
   await page.goto('/');
   await page.evaluate((progress) => localStorage.setItem('sticker-chaos-progress', JSON.stringify(progress)), {
-    ...DEFAULT_PROGRESS, completedLevels:Array.from({length:19},(_,index)=>index+1)
+    ...DEFAULT_PROGRESS, settings:{...DEFAULT_PROGRESS.settings,controlMode:'tap'}, completedLevels:Array.from({length:19},(_,index)=>index+1)
   });
   await page.reload();
   await page.getByRole('button',{name:/PLAY/}).first().click();
   await page.getByRole('button',{name:/Level 20:/}).click();
   await expect(page.locator('canvas')).toBeVisible();
   await page.waitForTimeout(500);
+  for (const [x,y] of [[85,270],[110,270],[135,270],[160,270]]) {
+    if (await page.getByRole('button',{name:/HEAVY/}).isVisible()) break;
+    await clickWorld(page,x,y);
+  }
+  await page.getByRole('button',{name:/HEAVY/}).click();
+  await clickWorld(page,300,415);
+  await expect(page.getByText('0/3 switches')).toBeVisible();
+  await page.getByRole('button',{name:/UNDO/}).click();
+  await expect(page.getByText('0/3 switches')).toBeVisible();
   for (const [sticker,targetX,targetY,goals] of [
     ['BIG',300,165,'1/3 switches'],
     ['FAST',300,290,'2/3 switches'],
@@ -281,6 +290,48 @@ test('final robot king powers all three switches', async ({page}) => {
     await clickWorld(page,targetX,targetY);
     await expect(page.getByText(goals)).toBeVisible({timeout:3000});
   }
+  await clickWorld(page,77,502);
+  await expect(page.getByText('🎁 ✓')).toBeVisible({timeout:5000});
+  await clickWorld(page,70,75);
+  await page.waitForTimeout(3200);
+  await clickWorld(page,195,62);
+  await expect(page.getByRole('heading',{name:'King Cluck surrendered!'})).toBeVisible({timeout:6000});
+  await page.getByRole('button',{name:'WORLD MAP'}).click();
+  await page.getByRole('button',{name:'Back'}).click();
+  await page.getByRole('button',{name:/MY BANDIT/}).click();
+  await expect(page.getByRole('button',{name:/Golden Bandit/})).toBeEnabled();
+});
+
+test('sticker factory opens its staged gates and can be completed', async ({page}) => {
+  await page.goto('/');
+  await page.evaluate((progress) => localStorage.setItem('sticker-chaos-progress', JSON.stringify(progress)), {
+    ...DEFAULT_PROGRESS, settings:{...DEFAULT_PROGRESS.settings,controlMode:'tap'}, completedLevels:Array.from({length:18},(_,index)=>index+1)
+  });
+  await page.reload();
+  await page.getByRole('button',{name:/PLAY/}).first().click();
+  await page.getByRole('button',{name:/Level 19:/}).click();
+  await expect(page.locator('canvas')).toBeVisible();
+  await page.waitForTimeout(450);
+  for (const [sticker,sourceX,sourceY,targetY,stage] of [
+    ['FAST',86,165,165,'1/3 switches'],
+    ['FLOATING',85,290,290,'2/3 switches'],
+    ['MAGNETIC',85,415,415,'3/3 switches']
+  ] as const) {
+    const pill=page.getByRole('button',{name:new RegExp(sticker)});
+    for (const x of [sourceX,sourceX+20,sourceX+40,sourceX-20]) {
+      if (await pill.isVisible()) break;
+      await clickWorld(page,x,sourceY);
+    }
+    await pill.click({timeout:3000});
+    await clickWorld(page,300,targetY);
+    await expect(page.getByText(stage)).toBeVisible({timeout:3000});
+  }
+  await clickWorld(page,77,502);
+  await expect(page.getByText('🎁 ✓')).toBeVisible({timeout:5000});
+  await clickWorld(page,60,75);
+  await page.waitForTimeout(3200);
+  await clickWorld(page,195,62);
+  await expect(page.getByRole('heading',{name:'Sticker spectacular!'})).toBeVisible({timeout:6000});
 });
 
 test('earned costume and sticker discoveries survive reopening', async ({page}) => {

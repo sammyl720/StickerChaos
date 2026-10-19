@@ -32,7 +32,7 @@ Playwright runs Chromium at desktop and emulated iPhone viewports, plus WebKit a
 
 Gameplay rules live in `src/game/stickerEngine.ts`, separate from the Phaser scene. Every entity starts with base radius, mass, speed, drag, restitution, push force, magnet range, and float capability. The eight stickers modify those values independently. `transfer` validates ownership, duplicate and incompatible size stickers, capacity, recipient eligibility, and growth room before changing either entity. It stores a pre-transfer snapshot for Undo. Restart restores the level definition. Phaser applies the resulting attributes to Arcade physics bodies; custom scene systems handle magnetism, impacts, autonomous FAST movement, and hazard repulsion.
 
-Levels are validated with Zod in `src/game/levels.ts`. Each has a documented transfer sequence, switch requirements, treasure, optional gem, and exit. The level tests apply every documented sequence and check its goals.
+Levels are validated with Zod in `src/game/levels.ts`. Each has a documented transfer sequence, switch requirements, physical fixtures, treasure, optional gem, and exit. Switches can require sticker properties, actual mass, movement speed, or magnetic reach. The two final puzzles open staged gates in order. The level tests apply every documented sequence, check its goals, and verify that the player can reach the treasure and exit after solving the puzzle.
 
 ## Saving and offline play
 
@@ -44,4 +44,4 @@ Run `npm run build` and publish the generated `dist/` directory to any HTTPS sta
 
 ## Compatibility and scope
 
-The app targets portrait mobile browsers and includes Canvas/WebGL fallback through Phaser AUTO, reduced-motion mode, touch controls, and a compact layout for smaller screens. Browser automation covers Chromium; actual iPhone and older iPod Safari behavior must be checked on those devices before a production launch. Character art and audio are original procedural assets.
+The app targets portrait mobile browsers and includes Phaser's Canvas/WebGL selection, a lower graphics mode that uses Canvas and fewer visual effects, reduced motion, touch controls, and a compact layout for smaller screens. Settings are available from the home screen and pause menu. Browser automation covers desktop Chromium, emulated iPhone Chromium, mobile WebKit, and compact mobile WebKit. Actual iPhone and older iPod Safari behavior must be checked on those devices before a production launch. Character art and audio are original procedural assets.

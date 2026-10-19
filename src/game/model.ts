@@ -52,6 +52,9 @@ export const GoalSchema = z.object({
   radius: z.number().default(38),
   targetId: z.string(),
   requires: z.array(StickerSchema).min(1).max(3),
+  minMass: z.number().positive().optional(),
+  minSpeed: z.number().positive().optional(),
+  minMagneticRadius: z.number().positive().optional(),
   label: z.string()
 });
 export type Goal = z.infer<typeof GoalSchema>;
@@ -73,6 +76,7 @@ export const LevelSchema = z.object({
   goals: z.array(GoalSchema).min(1),
   fixtures: z.array(FixtureSchema).default([]),
   bossId: z.string().optional(),
+  goalOrder: z.enum(['any', 'sequential']).default('any'),
   treasure: z.object({ x: z.number(), y: z.number() }),
   gem: z.object({ x: z.number(), y: z.number() }),
   exit: z.object({ x: z.number(), y: z.number() }),

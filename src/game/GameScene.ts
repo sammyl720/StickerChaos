@@ -40,6 +40,8 @@ export class GameScene extends Phaser.Scene {
   private bossPhase = 0;
   private goalMarks: Phaser.GameObjects.Arc[] = [];
   private goalActive: boolean[] = [];
+  private goalHistory: boolean[][] = [];
+  private lastTransferTarget: string | null = null;
   private selectedId: string | null = null;
   private armed: StickerType | null = null;
   private drag: { source: string; sticker: StickerType; x: number; y: number; ghost: Phaser.GameObjects.Text } | null = null;
@@ -51,6 +53,7 @@ export class GameScene extends Phaser.Scene {
   private gem = false;
   private transfers = 0;
   private completed = false;
+  private completionTimer?: Phaser.Time.TimerEvent;
   private treasureIcon?: Phaser.GameObjects.Text;
   private gemIcon?: Phaser.GameObjects.Text;
   private exitGlow?: Phaser.GameObjects.Arc;
@@ -59,6 +62,10 @@ export class GameScene extends Phaser.Scene {
   private tick = 0;
   private lastBounce = 0;
   private lastCollisionSound = 0;
+  private lastVisualTrail = new Map<string, number>();
+  private lastMagnetVisual = 0;
+  private reactUntil = new Map<string, number>();
+  private bossReactUntil = 0;
   private paused = false;
   private message = '';
 
@@ -87,7 +94,6 @@ export class GameScene extends Phaser.Scene {
     this.addExit();
     for (const entity of this.engine.all()) this.addPiece(entity);
     this.addFixtures();
-    if (this.level.number === 14) this.addTinyPassage();
     if (this.level.number === 1) {
       this.tutorialFinger = this.add.text(240, 77, '☝️', { fontSize: '27px' }).setDepth(25);
       if (!this.settings.reducedMotion) this.tweens.add({ targets: this.tutorialFinger, x: 209, y: 64, duration: 700, yoyo: true, repeat: -1 });
@@ -156,16 +162,6 @@ export class GameScene extends Phaser.Scene {
     const { x, y } = this.level.exit;
     this.exitGlow = this.add.circle(x, y + 13, 30, 0xffcf85, .85).setStrokeStyle(4, 0xffffff, .8).setDepth(1);
     this.add.text(x, y + 11, '🚪', { fontSize: '36px' }).setOrigin(.5).setDepth(5);
-  }
-  private addTinyPassage(): void {
-    const blocks = [
-      this.add.rectangle(96, 202, 174, 31, 0x745f9f).setStrokeStyle(4, 0xffffff),
-      this.add.rectangle(294, 202, 174, 31, 0x745f9f).setStrokeStyle(4, 0xffffff)
-    ];
-    for (const block of blocks) {
-      this.physics.add.existing(block, true);
-      for (const piece of this.pieces.values()) this.physics.add.collider(piece.sprite, block);
-    }
   }
   private addFixtures(): void {
     const colors = [0x70ab67, 0x6e87b6, 0x8b71b6, 0xae73cc];
@@ -281,8 +277,13 @@ export class GameScene extends Phaser.Scene {
     const source = this.engine.get(sourceId);
     const result = this.engine.transfer(sourceId, targetId, sticker);
     if (!result.ok) { this.say(this.errorText(result.reason)); playSound('invalid', this.settings.effectsVolume); this.shake(targetId); return; }
+    this.goalHistory.push([...this.goalActive]);
+    if (this.goalHistory.length > this.engine.maxUndo) this.goalHistory.shift();
+    this.lastTransferTarget = targetId;
     this.selectedId = result.source.stickers.length ? sourceId : null; this.armed = null; this.transfers++;
     this.applyStats(sourceId); this.applyStats(targetId);
+    this.transformEffect(sourceId, sticker, false);
+    this.transformEffect(targetId, sticker, true);
     this.updateBadges(sourceId); this.updateBadges(targetId);
     const launchGoal = this.level.goals.find((goal) => goal.targetId === targetId && Math.hypot(goal.x - result.target.x,goal.y - result.target.y) > goal.radius + 10);
     if (launchGoal && (sticker === 'BOUNCY' || sticker === 'SLIPPERY') && launchGoal.requires.every((value) => result.target.stickers.includes(value))) {
@@ -305,7 +306,52 @@ export class GameScene extends Phaser.Scene {
   }
   private shake(id: string): void {
     const sprite = this.pieces.get(id)?.sprite;
+    this.reactUntil.set(id,this.time.now+450);
     if (sprite && !this.settings.reducedMotion) this.tweens.add({ targets: sprite, angle: 12, duration: 65, yoyo: true, repeat: 2, onComplete: () => sprite.setAngle(0) });
+    if (sprite && !this.settings.reducedMotion) this.popText(sprite.x, sprite.y - 54, '?', '#ffedf8');
+  }
+  private popText(x: number, y: number, content: string, color: string): void {
+    if (this.settings.reducedMotion) return;
+    const text = this.add.text(x, y, content, { fontSize: '25px', color }).setOrigin(.5).setDepth(32);
+    this.tweens.add({ targets: text, y: y - 30, alpha: 0, duration: 750, onComplete: () => text.destroy() });
+  }
+  private transformEffect(id: string, sticker: StickerType, incoming: boolean): void {
+    const piece = this.pieces.get(id);
+    if (!piece || this.settings.reducedMotion) return;
+    const { sprite } = piece;
+    if (sticker === 'BIG' || sticker === 'TINY') {
+      this.tweens.killTweensOf(sprite);
+      const sx = sprite.scaleX, sy = sprite.scaleY;
+      const from = sticker === 'BIG' ? incoming ? .6 : 1.35 : incoming ? 1.45 : .7;
+      sprite.setScale(sx * from, sy * from);
+      this.tweens.add({ targets: sprite, scaleX: sx, scaleY: sy, duration: 320, ease: incoming ? 'Back.easeOut' : 'Cubic.easeOut' });
+    }
+    if (!incoming) { this.popText(sprite.x, sprite.y - 60, '!', '#fff8d2'); return; }
+    if (sticker === 'HEAVY') {
+      this.popText(sprite.x, sprite.y + 24, '✹', '#a1865a');
+      if (this.settings.graphicsQuality !== 'low') this.cameras.main.shake(100, .003);
+      for (let i = -1; i <= 1; i++) {
+        const dust = this.add.circle(sprite.x + i * 18, sprite.y + effectiveStats(this.engine.get(id)!).radius, 6, 0xd0aa76, .7).setDepth(4);
+        this.tweens.add({ targets: dust, x: dust.x + i * 22, alpha: 0, scale: .3, duration: 400, onComplete: () => dust.destroy() });
+      }
+    }
+    if (sticker === 'FLOATING') this.popText(sprite.x, sprite.y - 48, '☁', '#d5f8ff');
+    if (sticker === 'MAGNETIC') this.popText(sprite.x, sprite.y - 48, '✧', '#ffe4ff');
+    if (sticker === 'FAST') this.popText(sprite.x, sprite.y - 48, '⚡', '#fff3b1');
+    if (sticker === 'SLIPPERY') this.popText(sprite.x, sprite.y + 30, '✦', '#d6ffff');
+  }
+  private animatePiece(entity: EntityState, piece: SpritePiece): void {
+    if (this.settings.reducedMotion) return;
+    const speed = Math.hypot(entity.vx, entity.vy);
+    const phase = this.tick * (speed > 35 ? .018 : .003) + entity.id.length;
+    if (this.time.now > (this.reactUntil.get(entity.id) ?? 0) && (entity.id !== this.level.bossId || this.time.now > this.bossReactUntil)) piece.sprite.setAngle(Math.sin(phase) * (speed > 35 ? 5 : 2));
+    piece.shadow.setAlpha(effectiveStats(entity).canFloat ? .07 + Math.sin(this.tick * .005) * .025 : .17 + Math.sin(this.tick * .003) * .025);
+    if (this.tick - (this.lastVisualTrail.get(entity.id) ?? 0) < (this.settings.graphicsQuality === 'low' ? 350 : 150)) return;
+    if (speed < 35 && !entity.stickers.includes('FLOATING')) return;
+    const mark = entity.stickers.includes('FAST') ? '⚡' : entity.stickers.includes('SLIPPERY') ? '✧' : entity.stickers.includes('FLOATING') ? '☁' : '·';
+    const trail = this.add.text(entity.x - entity.vx * .035, entity.y - entity.vy * .035, mark, { fontSize: '15px', color: '#ffffff' }).setOrigin(.5).setDepth(4).setAlpha(.65);
+    this.tweens.add({ targets: trail, alpha: 0, scale: .4, duration: 480, onComplete: () => trail.destroy() });
+    this.lastVisualTrail.set(entity.id,this.tick);
   }
   private burst(x: number, y: number, color: string): void {
     if (this.settings.reducedMotion) return;
@@ -321,6 +367,7 @@ export class GameScene extends Phaser.Scene {
     const boss = this.level.bossId ? this.pieces.get(this.level.bossId)?.sprite : null;
     if (!boss) return;
     playSound('boss', this.settings.effectsVolume);
+    this.bossReactUntil = this.time.now + 700;
     if (this.settings.reducedMotion) return;
     const face = this.add.text(boss.x, boss.y - 68, ['😵', '😳', '🤯'][this.transfers % 3], { fontSize: '31px' }).setOrigin(.5).setDepth(35);
     this.tweens.add({ targets: face, y: face.y - 30, alpha: 0, duration: 900, onComplete: () => face.destroy() });
@@ -397,13 +444,26 @@ export class GameScene extends Phaser.Scene {
         this.lastBounce = this.time.now;
         this.callbacks.onBounce();
         playSound('bounce', this.settings.effectsVolume);
+        for (const id of ids) {
+          if (!id || !this.engine.get(id)?.stickers.includes('BOUNCY')) continue;
+          const piece = this.pieces.get(id);
+          if (piece && !this.settings.reducedMotion) this.tweens.add({ targets: piece.sprite, scaleX: piece.sprite.scaleX * 1.18, scaleY: piece.sprite.scaleY * .76, duration: 90, yoyo: true });
+        }
       }
     }
   }
-  private checkGoals(): void {
+  private checkGoals(allowActivation = true): void {
+    const currentStage = this.goalActive.filter(Boolean).length;
     this.level.goals.forEach((goal, index) => {
+      if (!allowActivation || (this.level.goalOrder === 'sequential' && (index !== currentStage || this.lastTransferTarget !== goal.targetId))) return;
       const entity = this.engine.get(goal.targetId);
-      const satisfies = entity && goal.requires.every((sticker) => entity.stickers.includes(sticker)) && Math.hypot(entity.x - goal.x, entity.y - goal.y) <= goal.radius + effectiveStats(entity).radius && !(goal.label.includes('PLATE') && effectiveStats(entity).canFloat);
+      const stats = entity ? effectiveStats(entity) : null;
+      const satisfies = entity && stats && goal.requires.every((sticker) => entity.stickers.includes(sticker))
+        && Math.hypot(entity.x - goal.x, entity.y - goal.y) <= goal.radius + stats.radius
+        && (goal.minMass === undefined || stats.mass >= goal.minMass)
+        && (goal.minSpeed === undefined || Math.hypot(entity.vx, entity.vy) >= goal.minSpeed)
+        && (goal.minMagneticRadius === undefined || stats.magneticRadius >= goal.minMagneticRadius)
+        && !(goal.label.includes('PLATE') && stats.canFloat);
       if (satisfies && !this.goalActive[index]) { this.goalActive[index] = true; this.goalMarks[index].setFillStyle(0x75e0ae,.85); playSound('goal',this.settings.effectsVolume); this.burst(goal.x,goal.y,'#5ddd9f'); }
       // Switches stay on once hit. FAST objects can speed away without undoing the puzzle.
     });
@@ -417,6 +477,7 @@ export class GameScene extends Phaser.Scene {
   updateSettings(settings: GameSettings): void { this.settings = settings; }
   setPaused(value: boolean): void { this.paused = value; if (value) this.physics.pause(); else this.physics.resume(); }
   undo(): void {
+    this.completionTimer?.remove(); this.completionTimer = undefined; this.completed = false;
     if (!this.engine.undo()) { this.say('Nothing to undo yet.'); return; }
     for (const entity of this.engine.all()) {
       const piece = this.pieces.get(entity.id); if (!piece) continue;
@@ -424,12 +485,15 @@ export class GameScene extends Phaser.Scene {
       this.applyStats(entity.id); this.updateBadges(entity.id);
     }
     this.transfers = Math.max(0,this.transfers-1); this.armed = null; this.selectedId = null;
-    this.goalActive = this.level.goals.map(() => false);
-    this.goalMarks.forEach((mark) => mark.setFillStyle(0xffe186,.64));
-    this.checkGoals(); this.say('Last sticker move undone.');
+    this.goalActive = this.goalHistory.pop() ?? this.level.goals.map(() => false);
+    this.lastTransferTarget = null;
+    this.goalMarks.forEach((mark,index) => mark.setFillStyle(this.goalActive[index] ? 0x75e0ae : 0xffe186, this.goalActive[index] ? .85 : .64));
+    this.checkGoals(false); this.say('Last sticker move undone.');
   }
   restart(): void {
+    this.completionTimer?.remove(); this.completionTimer = undefined;
     this.engine.resetLevel(); this.treasure = false; this.gem = false; this.transfers = 0; this.completed = false; this.armed = null; this.selectedId = null;
+    this.goalHistory = []; this.lastTransferTarget = null;
     this.treasureIcon?.setVisible(true); this.gemIcon?.setVisible(true);
     this.tutorialFinger?.setVisible(true);
     for (const entity of this.engine.all()) { const piece = this.pieces.get(entity.id); if (!piece) continue; piece.sprite.setPosition(entity.x,entity.y).setVelocity(0,0); this.applyStats(entity.id); this.updateBadges(entity.id); }
@@ -487,6 +551,7 @@ export class GameScene extends Phaser.Scene {
       if (entity.id === 'player') this.costumeMark?.setPosition(updated.x,updated.y - effectiveStats(updated).radius - 14);
       piece.shadow.setPosition(updated.x, updated.y + effectiveStats(updated).radius * .7);
       piece.badges.forEach((badge,index) => this.positionBadge(updated,badge,index));
+      this.animatePiece(updated,piece);
     }
     if (!this.armed) this.applyMagnetism();
     if (!this.treasure && Phaser.Math.Distance.Between(player.x,player.y,this.level.treasure.x,this.level.treasure.y) < 32) {
@@ -498,7 +563,12 @@ export class GameScene extends Phaser.Scene {
     if (this.tick % 150 < delta) this.checkGoals();
     if (this.treasure && this.goalActive.every(Boolean) && Phaser.Math.Distance.Between(player.x,player.y,this.level.exit.x,this.level.exit.y) < 33) {
       this.completed = true; const stars = 1 + Number(this.transfers <= this.level.par) + Number(this.gem);
-      playSound('win',this.settings.effectsVolume); this.callbacks.onComplete(stars,this.gem,playerState.stickers.includes('TINY'));
+      playSound('win',this.settings.effectsVolume);
+      if (!this.settings.reducedMotion) {
+        this.burst(player.x,player.y,'#ffe47f');
+        this.tweens.add({ targets: player, angle: { from: -15, to: 15 }, scaleY: player.scaleY * 1.15, duration: 130, yoyo: true, repeat: 2 });
+        this.completionTimer = this.time.delayedCall(650, () => { this.completionTimer = undefined; this.callbacks.onComplete(stars,this.gem,playerState.stickers.includes('TINY')); });
+      } else this.callbacks.onComplete(stars,this.gem,playerState.stickers.includes('TINY'));
     }
   }
 
@@ -514,6 +584,11 @@ export class GameScene extends Phaser.Scene {
         const force = Math.min(135,900/Math.max(1,effectiveStats(other).mass));
         const current = forces.get(other.id) ?? {x:0,y:0};
         forces.set(other.id,{x:current.x+dx/distance*force,y:current.y+dy/distance*force});
+        if (!this.settings.reducedMotion && this.settings.graphicsQuality !== 'low' && this.tick - this.lastMagnetVisual > 280) {
+          const spark = this.add.circle(other.x, other.y, 4, 0xf3a7fa).setDepth(16);
+          this.tweens.add({ targets: spark, x: magnet.x, y: magnet.y, alpha: 0, duration: 260, onComplete: () => spark.destroy() });
+          this.lastMagnetVisual = this.tick;
+        }
       }
     }
     for (const [id,force] of forces) {

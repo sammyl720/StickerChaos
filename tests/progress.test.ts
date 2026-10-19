@@ -5,6 +5,10 @@ describe('local progress', () => {
   it('round trips a versioned save and recovers from corrupt data', () => {
     const saved = {...structuredClone(DEFAULT_PROGRESS), completedLevels:[1,2], levelStars:{'1':3,'2':2}};
     expect(parseProgress(JSON.parse(JSON.stringify(saved)))).toEqual(saved);
+    const oldSave = structuredClone(saved);
+    const oldSettings = oldSave.settings as Partial<typeof saved.settings>;
+    delete oldSettings.graphicsQuality;
+    expect(parseProgress(oldSave)).toEqual(saved);
     expect(parseProgress({bad:true})).toEqual(DEFAULT_PROGRESS);
     expect(parseProgress('garbage')).toEqual(DEFAULT_PROGRESS);
   });
