@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 import { createArt } from './art';
 import { playSound } from './audio';
+import { creatureVelocity } from './behavior';
 import { effectiveStats, STICKER_INFO, type EntityState, type GameSettings, type Goal, type Level, type StickerType } from './sceneTypes';
 import type { Fixture } from './model';
 import { findTapRoute, type Point } from './navigation';
+import { platformPosition } from './platform';
 import { StickerEngine } from './stickerEngine';
 
 export interface SceneStatus {
@@ -25,6 +27,7 @@ export interface SceneCallbacks {
 }
 interface SpritePiece { sprite: Phaser.Physics.Arcade.Image; name: Phaser.GameObjects.Text; badges: Phaser.GameObjects.Text[]; shadow: Phaser.GameObjects.Ellipse }
 interface SolidFixture { definition: Fixture; object: Phaser.GameObjects.Rectangle; open: boolean }
+interface MovingFixture { definition: Fixture; object: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text; lastX: number }
 const W = 390, H = 620;
 const palette = [
   { sky: 0xffe9a8, ground: 0xb3e4a1, accent: 0x7dc979, dark: '#3c8b63' },
@@ -37,6 +40,7 @@ export class GameScene extends Phaser.Scene {
   readonly engine: StickerEngine;
   private pieces = new Map<string, SpritePiece>();
   private solids: SolidFixture[] = [];
+  private platforms: MovingFixture[] = [];
   private bossProps: Phaser.GameObjects.GameObject[] = [];
   private bossPhase = 0;
   private goalMarks: Phaser.GameObjects.Arc[] = [];
@@ -66,6 +70,7 @@ export class GameScene extends Phaser.Scene {
   private lastVisualTrail = new Map<string, number>();
   private lastMagnetVisual = 0;
   private reactUntil = new Map<string, number>();
+  private stunnedUntil = new Map<string, number>();
   private bossReactUntil = 0;
   private paused = false;
   private message = '';
@@ -261,6 +266,12 @@ export class GameScene extends Phaser.Scene {
   private addFixtures(): void {
     const colors = [0x70ab67, 0x6e87b6, 0x8b71b6, 0xae73cc];
     for (const definition of this.level.fixtures) {
+      if (definition.kind === 'platform') {
+        const object = this.add.rectangle(definition.x, definition.y, definition.w, definition.h, 0x8be3db, .9).setStrokeStyle(3, 0xffffff, .95).setDepth(2);
+        const label = this.add.text(definition.x, definition.y, '↔  MOVING  ↔', { fontFamily: 'Trebuchet MS, sans-serif', fontSize: '10px', color: '#3d4681', fontStyle: 'bold' }).setOrigin(.5).setDepth(3);
+        this.platforms.push({definition, object, label, lastX: definition.x});
+        continue;
+      }
       if (definition.kind === 'conveyor') {
         this.add.rectangle(definition.x, definition.y, definition.w, definition.h, 0x657fc4, .65).setStrokeStyle(3, 0xe7faff, .9).setDepth(2);
         const arrow = (definition.dx ?? 0) >= 0 ? '➜' : '⬅';
@@ -297,6 +308,23 @@ export class GameScene extends Phaser.Scene {
         body.updateFromGameObject();
         body.enable = true;
       }
+    }
+  }
+  private updatePlatforms(): void {
+    for (const platform of this.platforms) {
+      const x = platformPosition(platform.definition, this.tick);
+      const shift = x - platform.lastX;
+      if (Math.abs(shift) < .001) continue;
+      for (const entity of this.engine.all()) {
+        const piece = this.pieces.get(entity.id);
+        if (!piece) continue;
+        if (Math.abs(piece.sprite.x - platform.lastX) > platform.definition.w / 2) continue;
+        if (Math.abs(piece.sprite.y - platform.definition.y) > platform.definition.h / 2 + effectiveStats(entity).radius * .45) continue;
+        piece.sprite.x = Phaser.Math.Clamp(piece.sprite.x + shift, 12 + effectiveStats(entity).radius, 378 - effectiveStats(entity).radius);
+      }
+      platform.object.x = x;
+      platform.label.x = x;
+      platform.lastX = x;
     }
   }
   private addPiece(entity: EntityState): void {
@@ -526,12 +554,19 @@ export class GameScene extends Phaser.Scene {
     const ids = [a, b].map((sprite) => [...this.pieces].find(([, piece]) => piece.sprite === sprite)?.[0]);
     if (ids[0] && ids[1]) {
       const first = this.engine.get(ids[0])!, second = this.engine.get(ids[1])!;
-      const impact = Math.hypot(a.body?.velocity.x ?? 0, a.body?.velocity.y ?? 0);
+      const impact = Math.hypot((a.body?.velocity.x ?? 0) - (b.body?.velocity.x ?? 0), (a.body?.velocity.y ?? 0) - (b.body?.velocity.y ?? 0));
       if (impact > 20) {
         const push = Math.min(180, effectiveStats(first).pushForce / effectiveStats(second).mass);
         const dx = b.x - a.x, dy = b.y - a.y, length = Math.max(1,Math.hypot(dx,dy));
         b.setVelocity((b.body?.velocity.x ?? 0) + dx/length*push, (b.body?.velocity.y ?? 0) + dy/length*push);
         if (impact > 95 && this.time.now - this.lastCollisionSound > 300) { this.lastCollisionSound = this.time.now; playSound('collision', this.settings.effectsVolume * .55); }
+        if (impact > 125) for (const id of ids) {
+          if (!id) continue;
+          const entity = this.engine.get(id);
+          if (!entity || !['wander', 'patrol', 'chase', 'flee'].includes(entity.behavior)) continue;
+          if ((this.stunnedUntil.get(id) ?? 0) < this.time.now) this.popText(this.pieces.get(id)!.sprite.x, this.pieces.get(id)!.sprite.y - 47, '✦', '#ffed9c');
+          this.stunnedUntil.set(id, this.time.now + 420);
+        }
       }
     }
     if (ids.some((id) => id && this.engine.get(id)?.stickers.includes('BOUNCY'))) {
@@ -594,6 +629,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.transfers = Math.max(0,this.transfers-1); this.armed = null; this.selectedId = null;
     this.tapRoute = [];
+    this.stunnedUntil.clear();
     this.goalActive = this.goalHistory.pop() ?? this.level.goals.map(() => false);
     this.lastTransferTarget = null;
     this.goalMarks.forEach((mark,index) => mark.setFillStyle(this.goalActive[index] ? 0x75e0ae : 0xffe186, this.goalActive[index] ? .85 : .64));
@@ -604,6 +640,13 @@ export class GameScene extends Phaser.Scene {
     this.engine.resetLevel(); this.treasure = false; this.gem = false; this.transfers = 0; this.completed = false; this.armed = null; this.selectedId = null;
     this.goalHistory = []; this.lastTransferTarget = null;
     this.tapRoute = [];
+    this.stunnedUntil.clear();
+    this.tick = 0;
+    for (const platform of this.platforms) {
+      platform.lastX = platform.definition.x;
+      platform.object.x = platform.definition.x;
+      platform.label.x = platform.definition.x;
+    }
     this.treasureIcon?.setVisible(true); this.gemIcon?.setVisible(true);
     this.tutorialFinger?.setVisible(true);
     for (const entity of this.engine.all()) { const piece = this.pieces.get(entity.id); if (!piece) continue; piece.sprite.setPosition(entity.x,entity.y).setVelocity(0,0); this.applyStats(entity.id); this.updateBadges(entity.id); }
@@ -614,6 +657,7 @@ export class GameScene extends Phaser.Scene {
   update(_time: number, delta: number): void {
     if (this.paused || this.completed) return;
     this.tick += delta;
+    this.updatePlatforms();
     const player = this.pieces.get('player')?.sprite; const playerState = this.engine.get('player');
     if (!player || !playerState) return;
     const stats = effectiveStats(playerState);
@@ -641,17 +685,18 @@ export class GameScene extends Phaser.Scene {
         else {
           const attrs = effectiveStats(entity);
           const destination = this.level.goals.find((goal) => goal.targetId === entity.id && goal.requires.every((sticker) => entity.stickers.includes(sticker)));
-          if (entity.behavior === 'activate' && destination) {
+          const stunned = this.time.now < (this.stunnedUntil.get(entity.id) ?? 0) || (this.level.number === 10 && entity.id === this.level.bossId && this.goalActive[0]);
+          if (!stunned && entity.behavior === 'activate' && destination) {
             const dx = destination.x - piece.sprite.x, dy = destination.y - piece.sprite.y, distance = Math.hypot(dx,dy);
             piece.sprite.setAcceleration(0,0);
             if (distance > 8) piece.sprite.setVelocity(dx/distance*attrs.speed*1.7,dy/distance*attrs.speed*1.7);
             else piece.sprite.setVelocity(0,0);
-          } else if (entity.stickers.includes('FAST') || entity.behavior === 'wander' || entity.behavior === 'patrol') {
-            const speed = entity.stickers.includes('FAST') ? attrs.speed * .55 : attrs.speed * .3;
-            const phase = this.tick * .001 + entity.id.length;
-            const dx = Math.cos(phase * .9), dy = Math.sin(phase * 1.15);
-            piece.sprite.setAcceleration(0,0).setVelocity(dx * speed, dy * speed);
-          } else piece.sprite.setAcceleration(0,0);
+          } else {
+            const home = this.level.entities.find((candidate) => candidate.id === entity.id)!;
+            const velocity = creatureVelocity(entity, home, player, this.tick, stunned);
+            piece.sprite.setAcceleration(0,0);
+            if (velocity) piece.sprite.setVelocity(velocity.x, velocity.y);
+          }
         }
       }
       for (const fixture of this.level.fixtures) {

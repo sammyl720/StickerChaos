@@ -6,7 +6,7 @@ export const STICKERS: StickerType[] = StickerSchema.options;
 
 export const ENTITY_KINDS = ['bandit', 'chicken', 'apple', 'snail', 'rock', 'boulder', 'ball', 'turtle', 'robot', 'knight', 'key', 'frog', 'crate'] as const;
 export type EntityKind = typeof ENTITY_KINDS[number];
-export type Behavior = 'idle' | 'wander' | 'patrol' | 'chase' | 'flee' | 'activate';
+export type Behavior = 'idle' | 'wander' | 'patrol' | 'chase' | 'flee' | 'activate' | 'stunned';
 
 export interface Stats {
   radius: number;
@@ -39,7 +39,7 @@ export const EntitySchema = z.object({
   x: z.number().min(20).max(400),
   y: z.number().min(30).max(650),
   stickers: z.array(StickerSchema).max(3).default([]),
-  behavior: z.enum(['idle', 'wander', 'patrol', 'chase', 'flee', 'activate']).default('idle'),
+  behavior: z.enum(['idle', 'wander', 'patrol', 'chase', 'flee', 'activate', 'stunned']).default('idle'),
   canReceive: z.boolean().default(true),
   canDonate: z.boolean().default(true)
 });
@@ -60,10 +60,11 @@ export const GoalSchema = z.object({
 export type Goal = z.infer<typeof GoalSchema>;
 
 export const FixtureSchema = z.object({
-  kind: z.enum(['wall', 'gate', 'conveyor', 'hazard']),
+  kind: z.enum(['wall', 'gate', 'conveyor', 'hazard', 'platform']),
   x: z.number(), y: z.number(), w: z.number().positive(), h: z.number().positive(),
   opensAfter: z.number().int().nonnegative().optional(),
-  dx: z.number().optional(), dy: z.number().optional()
+  dx: z.number().optional(), dy: z.number().optional(),
+  range: z.number().nonnegative().optional(), period: z.number().positive().optional()
 });
 export type Fixture = z.infer<typeof FixtureSchema>;
 
